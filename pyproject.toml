@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "clinicalclaw"
+version = "0.1.0"
+description = "Modular clinical AI execution and integration platform built on top of a vendored ClawAgents runtime"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Lan Qian and ClinicalClaw Contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "openai>=1.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+]
+
+[project.optional-dependencies]
+gemini = ["google-genai>=0.1.0"]
+anthropic = ["anthropic>=0.40.0"]
+accurate-tokens = ["tiktoken>=0.5.0"]
+all = ["google-genai>=0.1.0", "anthropic>=0.40.0", "tiktoken>=0.5.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "httpx>=0.27.0",
+    "tiktoken>=0.5.0",
+    "google-genai>=0.1.0",
+    "anthropic>=0.40.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/lanqz7766/ClinicalClaw"
+Repository = "https://github.com/lanqz7766/ClinicalClaw"
+Issues = "https://github.com/lanqz7766/ClinicalClaw/issues"
+
+[project.scripts]
+clinicalclaw-api = "clinicalclaw.__main__:main"
+clawagents = "clawagents.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clawagents", "src/clinicalclaw"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = ["benchmark: performance benchmark tests (deselect with -m 'not benchmark')"]

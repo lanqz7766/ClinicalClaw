@@ -1,0 +1,32 @@
+{
+  "id": "diagnostic_prep",
+  "name": "Diagnostic Preparation Pack",
+  "summary": "Prepare a structured pre-visit brief from chart and imaging context.",
+  "clinical_goal": "Reduce physician preparation time before an encounter.",
+  "inputs": [
+    "FHIR patient context",
+    "FHIR encounter context",
+    "ImagingStudy or recent DiagnosticReport references"
+  ],
+  "outputs": [
+    "Structured physician briefing",
+    "DocumentReference draft",
+    "Audit and provenance placeholders"
+  ],
+  "review_gate": "Physician approval required before filing or write-back.",
+  "policy": {
+    "allowed_tools": [
+      "think",
+      "write_todos",
+      "read_file",
+      "web_fetch"
+    ],
+    "blocked_tools": [
+      "execute",
+      "write_file"
+    ],
+    "write_back": false,
+    "phi_access": true,
+    "requires_human_review": true
+  }
+}

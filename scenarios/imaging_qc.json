@@ -1,0 +1,32 @@
+{
+  "id": "imaging_qc",
+  "name": "Imaging QC and Reproducible Analysis",
+  "summary": "Run controlled imaging quality-control and derived-measure workflows.",
+  "clinical_goal": "Support reproducible imaging review for research or follow-up cohorts.",
+  "inputs": [
+    "ImagingStudy identifiers",
+    "DICOM metadata",
+    "Batch selection criteria"
+  ],
+  "outputs": [
+    "QC result summary",
+    "Observation-ready numeric outputs",
+    "DocumentReference draft for review"
+  ],
+  "review_gate": "Clinical or research reviewer approval required before any external filing.",
+  "policy": {
+    "allowed_tools": [
+      "think",
+      "write_todos",
+      "read_file",
+      "ls",
+      "tree"
+    ],
+    "blocked_tools": [
+      "execute"
+    ],
+    "write_back": false,
+    "phi_access": true,
+    "requires_human_review": true
+  }
+}
