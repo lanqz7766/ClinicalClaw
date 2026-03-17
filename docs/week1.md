@@ -9,7 +9,6 @@ Build a runnable shell platform plus two scenario drafts.
 - vendored `clawagents` runtime copied into the repository
 - `clinicalclaw` platform package with:
   - application config
-  - API shell
   - in-memory data models
   - scenario loader
   - runtime policy wrapper

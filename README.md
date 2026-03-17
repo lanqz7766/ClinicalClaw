@@ -2,7 +2,6 @@
 
 ClinicalClaw is a modular clinical AI execution and integration platform for hospital workflows. This repository currently vendors `clawagents_py` as the agent runtime foundation and adds the Week 1 platform shell required for:
 
-- platform API scaffolding
 - scenario definitions
 - policy and tool allowlists
 - audit, task, artifact, and case model placeholders
@@ -12,11 +11,11 @@ ClinicalClaw is a modular clinical AI execution and integration platform for hos
 
 Week 1 targets a runnable shell platform rather than a completed clinical product. The shell includes:
 
-- a FastAPI app under `src/clinicalclaw`
 - vendored `clawagents` runtime under `src/clawagents`
 - two scenario drafts in `scenarios/`
 - in-memory models for cases, tasks, artifacts, and access events
 - a policy preview layer for controlled tool execution
+- internal platform modules under `src/clinicalclaw`
 
 ## Repository Layout
 
@@ -53,19 +52,18 @@ Fill in provider settings only when you want live LLM execution. The platform sh
 ### 3. Start the platform API
 
 ```bash
-clinicalclaw-api
+clawagents --serve
 ```
 
-Default URL: `http://127.0.0.1:8000`
+Default gateway URL: `http://127.0.0.1:3000`
 
 Useful endpoints:
 
 - `GET /health`
-- `GET /v1/scenarios`
-- `GET /v1/policies`
-- `GET /v1/cases`
-- `GET /v1/tasks`
-- `POST /v1/tasks`
+- `GET /queue`
+- `POST /chat`
+- `POST /chat/stream`
+- `WS /ws`
 
 ## Scenarios
 
