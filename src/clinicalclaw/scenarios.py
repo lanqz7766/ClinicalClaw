@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from clinicalclaw.models import ScenarioSpec
@@ -19,4 +18,3 @@ def load_scenarios(directory: str | Path) -> list[ScenarioSpec]:
 
 def load_scenario_map(directory: str | Path) -> dict[str, ScenarioSpec]:
     return {scenario.id: scenario for scenario in load_scenarios(directory)}
-

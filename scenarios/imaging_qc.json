@@ -1,19 +1,82 @@
 {
   "id": "imaging_qc",
+  "version": "1.0",
   "name": "Imaging QC and Reproducible Analysis",
   "summary": "Run controlled imaging quality-control and derived-measure workflows.",
   "clinical_goal": "Support reproducible imaging review for research or follow-up cohorts.",
+  "intent_type": "imaging_quality_control",
   "inputs": [
-    "ImagingStudy identifiers",
-    "DICOM metadata",
-    "Batch selection criteria"
+    {
+      "name": "imaging_study_ids",
+      "source": "DICOM StudyInstanceUID or ImagingStudy identifiers",
+      "description": "Identifiers for the studies selected for QC or reproducible analysis.",
+      "required": true,
+      "classification": "metadata_only"
+    },
+    {
+      "name": "dicom_metadata",
+      "source": "DICOM metadata",
+      "description": "Series- and instance-level metadata used to route quality-control logic.",
+      "required": true,
+      "classification": "phi"
+    },
+    {
+      "name": "batch_criteria",
+      "source": "Internal workflow config",
+      "description": "Cohort or batch selection rules supplied by an operator.",
+      "required": false,
+      "classification": "internal"
+    }
   ],
   "outputs": [
-    "QC result summary",
-    "Observation-ready numeric outputs",
-    "DocumentReference draft for review"
+    {
+      "name": "qc_summary",
+      "kind": "quality_report",
+      "description": "Human-reviewable quality-control summary for each study or batch.",
+      "format": "json",
+      "review_required": true,
+      "target_mappings": [
+        {
+          "standard": "FHIR",
+          "resource_type": "DocumentReference",
+          "notes": "Rendered report candidate after review."
+        }
+      ]
+    },
+    {
+      "name": "derived_measurements",
+      "kind": "measurement_set",
+      "description": "Observation-ready derived metrics from the reproducible analysis flow.",
+      "format": "json",
+      "review_required": true,
+      "target_mappings": [
+        {
+          "standard": "FHIR",
+          "resource_type": "Observation",
+          "notes": "Numeric result candidates; no automatic filing in Week 1."
+        }
+      ]
+    }
   ],
-  "review_gate": "Clinical or research reviewer approval required before any external filing.",
+  "review": {
+    "required": true,
+    "reviewer_role": "clinical_reviewer",
+    "approve_transition": "approved",
+    "reject_transition": "rejected",
+    "notes": "Any derived metrics require human review before export or filing."
+  },
+  "failure_policies": [
+    {
+      "code": "missing_dicom_metadata",
+      "condition": "The selected study lacks metadata needed for QC routing.",
+      "action": "Mark the run failed with explicit missing-metadata details."
+    },
+    {
+      "code": "compute_tool_unavailable",
+      "condition": "The execution environment cannot access the required QC or analysis tool.",
+      "action": "Return a dry-run plan and do not simulate results."
+    }
+  ],
   "policy": {
     "allowed_tools": [
       "think",
@@ -27,6 +90,12 @@
     ],
     "write_back": false,
     "phi_access": true,
-    "requires_human_review": true
+    "requires_human_review": true,
+    "max_iterations": 12,
+    "connectors": {
+      "ehr": "none",
+      "imaging": "read",
+      "write_back": "none"
+    }
   }
 }

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from clinicalclaw.models import (
     AccessAction,
+    AccessOutcome,
     AccessEventRecord,
     ArtifactRecord,
+    ArtifactStatus,
     ArtifactType,
     CaseRecord,
     CreateTaskRunRequest,
@@ -40,6 +42,7 @@ class MemoryStore:
                 status="in_review",
                 note="Demo task for platform shell",
                 policy_snapshot=first.policy,
+                review_required=first.review.required,
                 metadata={"demo": True},
             )
             self.tasks[demo_task.id] = demo_task
@@ -49,6 +52,7 @@ class MemoryStore:
             artifact_type=ArtifactType.json,
             title="Shell platform manifest",
             path=".clinicalclaw/artifacts/demo_manifest.json",
+            status=ArtifactStatus.in_review,
             metadata={"status": "placeholder"},
         )
         self.artifacts[demo_artifact.id] = demo_artifact
@@ -57,7 +61,9 @@ class MemoryStore:
             case_id=demo_case.id,
             system="shell-platform",
             action=AccessAction.launch,
-            outcome="success",
+            resource_type="PlatformSession",
+            resource_id="bootstrap",
+            outcome=AccessOutcome.success,
             details={"note": "Week 1 bootstrap event"},
         )
         self.access_events[demo_access.id] = demo_access
@@ -84,8 +90,8 @@ class MemoryStore:
             requested_by=request.requested_by,
             note=request.note,
             policy_snapshot=scenario.policy,
+            review_required=scenario.review.required,
             metadata={"scenario_name": scenario.name},
         )
         self.tasks[task.id] = task
         return task
-

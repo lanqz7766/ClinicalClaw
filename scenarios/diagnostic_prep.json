@@ -1,19 +1,84 @@
 {
   "id": "diagnostic_prep",
+  "version": "1.0",
   "name": "Diagnostic Preparation Pack",
   "summary": "Prepare a structured pre-visit brief from chart and imaging context.",
   "clinical_goal": "Reduce physician preparation time before an encounter.",
+  "intent_type": "pre_visit_briefing",
   "inputs": [
-    "FHIR patient context",
-    "FHIR encounter context",
-    "ImagingStudy or recent DiagnosticReport references"
+    {
+      "name": "patient_context",
+      "source": "FHIR Patient",
+      "description": "Patient demographics and identifiers required to anchor the workflow.",
+      "required": true,
+      "classification": "phi",
+      "example": "Patient/123"
+    },
+    {
+      "name": "encounter_context",
+      "source": "FHIR Encounter",
+      "description": "Current encounter or appointment context for the requesting clinician.",
+      "required": false,
+      "classification": "phi",
+      "example": "Encounter/456"
+    },
+    {
+      "name": "recent_imaging_index",
+      "source": "FHIR ImagingStudy or DiagnosticReport",
+      "description": "Recent imaging references used to assemble the diagnostic preparation pack.",
+      "required": false,
+      "classification": "metadata_only"
+    }
   ],
   "outputs": [
-    "Structured physician briefing",
-    "DocumentReference draft",
-    "Audit and provenance placeholders"
+    {
+      "name": "physician_brief",
+      "kind": "summary",
+      "description": "Structured pre-visit brief for clinician review.",
+      "format": "markdown",
+      "review_required": true,
+      "target_mappings": [
+        {
+          "standard": "INTERNAL",
+          "resource_type": "ClinicalClawBrief",
+          "notes": "Internal shell artifact used before any EHR filing."
+        }
+      ]
+    },
+    {
+      "name": "document_reference_draft",
+      "kind": "report",
+      "description": "Draft report artifact that could later map to a FHIR DocumentReference.",
+      "format": "json",
+      "review_required": true,
+      "target_mappings": [
+        {
+          "standard": "FHIR",
+          "resource_type": "DocumentReference",
+          "notes": "Draft only in Week 1; write-back remains disabled."
+        }
+      ]
+    }
   ],
-  "review_gate": "Physician approval required before filing or write-back.",
+  "review": {
+    "required": true,
+    "reviewer_role": "physician",
+    "approve_transition": "approved",
+    "reject_transition": "rejected",
+    "notes": "No report may be filed or exported without physician approval."
+  },
+  "failure_policies": [
+    {
+      "code": "missing_patient_context",
+      "condition": "No patient identifier or launch context is available.",
+      "action": "Stop the workflow and request context instead of guessing."
+    },
+    {
+      "code": "connector_unavailable",
+      "condition": "FHIR or imaging index is unavailable.",
+      "action": "Return a partial briefing with missing-data flags and keep status in_review."
+    }
+  ],
   "policy": {
     "allowed_tools": [
       "think",
@@ -27,6 +92,12 @@
     ],
     "write_back": false,
     "phi_access": true,
-    "requires_human_review": true
+    "requires_human_review": true,
+    "max_iterations": 10,
+    "connectors": {
+      "ehr": "read",
+      "imaging": "read",
+      "write_back": "none"
+    }
   }
 }
