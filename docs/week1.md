@@ -12,6 +12,7 @@ Build a runnable shell platform plus two scenario drafts.
   - in-memory data models
   - scenario loader
   - runtime policy wrapper
+  - scenario execution service wired into the original gateway path
 - scenario drafts:
   - `diagnostic_prep`
   - `imaging_qc`

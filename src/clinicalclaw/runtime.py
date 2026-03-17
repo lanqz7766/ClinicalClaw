@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Callable
+from typing import Any, Callable
 
 from clawagents import create_claw_agent
 
@@ -30,9 +30,13 @@ def build_tool_gate(policy: ToolPolicy) -> Callable[[str, dict], bool]:
     return gate
 
 
-def build_agent_for_scenario(settings: ClinicalClawSettings, scenario: ScenarioSpec):
+def build_agent_for_scenario(
+    settings: ClinicalClawSettings,
+    scenario: ScenarioSpec,
+    model: Any | None = None,
+):
     agent = create_claw_agent(
-        model=settings.default_model,
+        model=model or settings.default_model,
         instruction=(
             "You are ClinicalClaw, a hospital workflow execution assistant. "
             f"Execute the '{scenario.name}' scenario only. "

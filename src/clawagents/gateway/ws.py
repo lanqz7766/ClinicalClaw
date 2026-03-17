@@ -45,7 +45,7 @@ def _get_or_create_session(session_id: str) -> dict:
     return _sessions[session_id]
 
 
-def attach_websocket(app: FastAPI, llm: Any, gateway_api_key: str):
+def attach_websocket(app: FastAPI, llm: Any, gateway_api_key: str, clinicalclaw: Any | None = None):
     """Register the /ws WebSocket endpoint on the FastAPI app."""
 
     @app.websocket("/ws")
@@ -74,7 +74,7 @@ def attach_websocket(app: FastAPI, llm: Any, gateway_api_key: str):
                     await ws.send_json(make_response(msg["id"], True, {"pong": int(time.time() * 1000)}))
 
                 elif method == "chat.send":
-                    await _handle_chat_send(ws, msg, llm)
+                    await _handle_chat_send(ws, msg, llm, clinicalclaw)
 
                 elif method == "chat.history":
                     _handle_chat_history_sync(ws, msg)
@@ -93,7 +93,7 @@ def attach_websocket(app: FastAPI, llm: Any, gateway_api_key: str):
     print("   WebSocket: enabled on ws:// /ws")
 
 
-async def _handle_chat_send(ws: WebSocket, msg: dict, llm: Any):
+async def _handle_chat_send(ws: WebSocket, msg: dict, llm: Any, clinicalclaw: Any | None = None):
     params = msg["params"]
     task = str(params.get("task", ""))
     if not task:
@@ -101,6 +101,11 @@ async def _handle_chat_send(ws: WebSocket, msg: dict, llm: Any):
         return
 
     lane = _resolve_lane(params.get("lane"))
+    scenario_id = params.get("scenario_id") or params.get("scenarioId")
+    requested_by = params.get("requested_by") or params.get("requestedBy") or "ws-chat"
+    case_id = params.get("case_id") or params.get("caseId")
+    external_patient_id = params.get("external_patient_id") or params.get("externalPatientId")
+    note = params.get("note")
     session_id = _resolve_session(params.get("sessionId"))
     session = _get_or_create_session(session_id)
 
@@ -111,11 +116,29 @@ async def _handle_chat_send(ws: WebSocket, msg: dict, llm: Any):
         await ws.send_json(make_event(event, {**payload, "sessionId": session_id}, seq))
         seq += 1
 
-    await send_event("queued", {"lane": lane, "position": get_queue_size(lane)})
+    await send_event("queued", {"lane": lane, "position": get_queue_size(lane), "scenario_id": scenario_id})
 
     try:
         async def _execute():
-            await send_event("started", {"lane": lane})
+            await send_event("started", {"lane": lane, "scenario_id": scenario_id})
+            if scenario_id:
+                if clinicalclaw is None or not clinicalclaw.get_scenario(scenario_id):
+                    raise ValueError(f"Unknown scenario_id: {scenario_id}")
+
+                async def on_event(kind, data):
+                    await send_event("agent", {"kind": kind, **(data if isinstance(data, dict) else {"data": data})})
+
+                return await clinicalclaw.invoke_scenario(
+                    task=task,
+                    scenario_id=scenario_id,
+                    llm=llm,
+                    requested_by=requested_by,
+                    case_id=case_id,
+                    external_patient_id=external_patient_id,
+                    note=note,
+                    on_event=on_event,
+                )
+
             agent = create_claw_agent(model=llm)
 
             async def on_event(kind, data):
@@ -126,16 +149,30 @@ async def _handle_chat_send(ws: WebSocket, msg: dict, llm: Any):
         result = await enqueue_command_in_lane(lane, _execute)
 
         now_ms = int(time.time() * 1000)
-        session["messages"].append({"role": "user", "content": task, "timestamp": now_ms})
-        session["messages"].append({"role": "assistant", "content": result.result or "", "timestamp": now_ms})
-
-        await ws.send_json(make_response(msg["id"], True, {
-            "sessionId": session_id,
-            "lane": lane,
-            "status": result.status,
-            "result": result.result,
-            "iterations": result.iterations,
-        }))
+        session["messages"].append({"role": "user", "content": task, "timestamp": now_ms, "scenarioId": scenario_id})
+        if scenario_id:
+            session["messages"].append({"role": "assistant", "content": result.result.result or "", "timestamp": now_ms, "scenarioId": scenario_id})
+            await ws.send_json(make_response(msg["id"], True, {
+                "sessionId": session_id,
+                "lane": lane,
+                "scenarioId": result.scenario.id,
+                "taskRunId": result.task_run_id,
+                "reviewRequired": result.review_required,
+                "artifactIds": result.artifact_ids,
+                "accessEventIds": result.access_event_ids,
+                "status": result.result.status,
+                "result": result.result.result,
+                "iterations": result.result.iterations,
+            }))
+        else:
+            session["messages"].append({"role": "assistant", "content": result.result or "", "timestamp": now_ms})
+            await ws.send_json(make_response(msg["id"], True, {
+                "sessionId": session_id,
+                "lane": lane,
+                "status": result.status,
+                "result": result.result,
+                "iterations": result.iterations,
+            }))
     except Exception as e:
         await ws.send_json(make_response(msg["id"], False, str(e)))
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from clinicalclaw.models import (
     AccessAction,
     AccessOutcome,
@@ -12,6 +14,10 @@ from clinicalclaw.models import (
     ScenarioSpec,
     TaskRunRecord,
 )
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 class MemoryStore:
@@ -95,3 +101,27 @@ class MemoryStore:
         )
         self.tasks[task.id] = task
         return task
+
+    def update_task_status(self, task_id: str, status: str, note: str | None = None) -> TaskRunRecord:
+        task = self.tasks[task_id]
+        task.status = status
+        task.updated_at = utc_now()
+        if note is not None:
+            task.note = note
+        return task
+
+    def add_access_event(self, event: AccessEventRecord) -> AccessEventRecord:
+        self.access_events[event.id] = event
+        if event.task_run_id and event.task_run_id in self.tasks:
+            task = self.tasks[event.task_run_id]
+            task.access_event_ids.append(event.id)
+            task.updated_at = utc_now()
+        return event
+
+    def add_artifact(self, artifact: ArtifactRecord) -> ArtifactRecord:
+        self.artifacts[artifact.id] = artifact
+        if artifact.task_run_id and artifact.task_run_id in self.tasks:
+            task = self.tasks[artifact.task_run_id]
+            task.artifact_ids.append(artifact.id)
+            task.updated_at = utc_now()
+        return artifact

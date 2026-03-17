@@ -65,6 +65,20 @@ Useful endpoints:
 - `POST /chat/stream`
 - `WS /ws`
 
+### Optional Scenario Mode
+
+The external API surface stays the same, but `POST /chat`, `POST /chat/stream`, and `WS /ws` now accept an optional scenario selector:
+
+```json
+{
+  "task": "Prepare a pre-visit brief for the current imaging case",
+  "scenario_id": "diagnostic_prep",
+  "requested_by": "local-dev"
+}
+```
+
+If `scenario_id` is omitted, the gateway behaves like plain upstream `clawagents`.
+
 ## Scenarios
 
 The initial scenario drafts are:
