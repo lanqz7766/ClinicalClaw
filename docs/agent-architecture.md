@@ -25,9 +25,11 @@ ClinicalClaw currently runs with two execution paths on top of the vendored `cla
 - responsibility:
   - load scenario definitions
   - load normalized connectors
+  - persist local execution state
   - create a `TaskRunRecord`
   - enforce tool policy
   - collect read-only connector context
+  - inject recent run memory
   - inject scenario instructions into the prompt
   - mark the run as `in_review` when human review is required
   - create placeholder artifact records and access events

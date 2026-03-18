@@ -102,6 +102,19 @@ Default mode is `mock`, which gives stable local development without requiring r
 - encounter fetch
 - chart bundle assembly
 
+## Persistence And Memory
+
+ClinicalClaw now persists local development state in SQLite by default:
+
+- tasks
+- artifacts
+- access events
+- SMART launch sessions
+- SMART token states
+- run memories for prior success/failure guidance
+
+Default state path: `.clinicalclaw/state.db`
+
 ## Upstream Base
 
 This repository includes code copied from [x1jiang/clawagents_py](https://github.com/x1jiang/clawagents_py). The runtime remains in `src/clawagents` so we can reuse its gateway, queueing, tool registry, sandbox, and agent loop while layering hospital-specific platform concerns in `src/clinicalclaw`.

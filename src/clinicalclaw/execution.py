@@ -5,7 +5,12 @@ from typing import Any
 
 from clinicalclaw.config import ClinicalClawSettings, load_settings
 from clinicalclaw.connectors import ConnectorBundle, build_connector_bundle
-from clinicalclaw.connectors.base import PatientChartBundle
+from clinicalclaw.connectors.base import (
+    PatientChartBundle,
+    SmartEndpoints,
+    SmartLaunchRequest,
+    SmartLaunchSession,
+)
 from clinicalclaw.models import (
     AccessAction,
     AccessEventRecord,
@@ -14,12 +19,16 @@ from clinicalclaw.models import (
     ArtifactStatus,
     ArtifactType,
     CreateTaskRunRequest,
+    MemoryOutcome,
+    RunMemoryRecord,
     ScenarioOutput,
     ScenarioSpec,
+    SmartLaunchSessionRecord,
+    SmartTokenStateRecord,
 )
 from clinicalclaw.runtime import build_agent_for_scenario
 from clinicalclaw.scenarios import load_scenario_map
-from clinicalclaw.store import MemoryStore
+from clinicalclaw.store import MemoryStore, SQLiteStore
 
 
 @dataclass
@@ -42,7 +51,7 @@ class ClinicalClawService:
     ) -> None:
         self.settings = settings or load_settings()
         self.scenario_map = scenario_map or load_scenario_map(self.settings.scenario_dir)
-        self.store = store or MemoryStore()
+        self.store = store or SQLiteStore(self.settings.database_path)
         self.connectors = connectors or build_connector_bundle(self.settings)
         self.store.bootstrap_demo_data(list(self.scenario_map.values()))
 
@@ -56,6 +65,7 @@ class ClinicalClawService:
         task: str,
         scenario: ScenarioSpec,
         connector_context: str = "",
+        memory_context: str = "",
     ) -> str:
         input_names = ", ".join(item.name for item in scenario.inputs) or "none"
         output_names = ", ".join(item.name for item in scenario.outputs) or "none"
@@ -79,6 +89,7 @@ class ClinicalClawService:
             "Failure handling rules:\n"
             f"{failure_rules}\n\n"
             f"{connector_context}"
+            f"{memory_context}"
             "Task request:\n"
             f"{task}\n\n"
             "Constraints:\n"
@@ -86,6 +97,17 @@ class ClinicalClawService:
             "- Do not claim write-back completed.\n"
             "- Return a review-ready result with missing-data flags when needed."
         )
+
+    def build_memory_context(self, scenario_id: str) -> str:
+        memories = self.store.list_run_memories(scenario_id, limit=self.settings.memory_history_limit)
+        if not memories:
+            return ""
+        lines = ["Relevant prior run memory:"]
+        for memory in memories:
+            lines.append(
+                f"- [{memory.outcome.value}] {memory.summary} Guidance: {memory.guidance}"
+            )
+        return "\n".join(lines) + "\n\n"
 
     async def collect_connector_context(
         self,
@@ -212,6 +234,109 @@ class ClinicalClawService:
             metadata={"scenario_id": scenario.id, "output_kind": output.kind},
         )
 
+    def _record_run_memory(
+        self,
+        *,
+        scenario: ScenarioSpec,
+        task_run_id: str,
+        outcome: MemoryOutcome,
+        summary: str,
+        guidance: str,
+        content: str,
+    ) -> None:
+        self.store.add_run_memory(
+            RunMemoryRecord(
+                scenario_id=scenario.id,
+                task_run_id=task_run_id,
+                outcome=outcome,
+                summary=summary,
+                guidance=guidance,
+                content=content,
+                metadata={"scenario_name": scenario.name},
+            )
+        )
+
+    async def begin_smart_launch(
+        self,
+        *,
+        iss: str,
+        launch: str | None = None,
+        patient_id: str | None = None,
+        encounter_id: str | None = None,
+        state: str | None = None,
+    ) -> SmartLaunchSessionRecord:
+        session = await self.connectors.ehr.begin_sandbox_launch(
+            iss=iss,
+            launch=launch,
+            patient_id=patient_id,
+            encounter_id=encounter_id,
+            state=state,
+        )
+        return self.store.save_smart_launch_session(
+            SmartLaunchSessionRecord(
+                iss=session.request.iss,
+                state=session.state,
+                authorize_url=session.authorize_url,
+                client_id=session.request.client_id,
+                redirect_uri=session.request.redirect_uri,
+                scope=session.request.scope,
+                launch=session.request.launch,
+                patient_id=session.request.patient_id,
+                encounter_id=session.request.encounter_id,
+                code_verifier=session.code_verifier,
+                metadata={"mode": session.metadata.get("mode", ""), "endpoints": session.endpoints.metadata},
+            )
+        )
+
+    async def complete_smart_launch(
+        self,
+        *,
+        session_id: str,
+        callback_url: str,
+    ) -> tuple[SmartTokenStateRecord, Any]:
+        persisted = self.store.get_smart_launch_session(session_id)
+        if not persisted:
+            raise ValueError(f"Unknown SMART launch session: {session_id}")
+
+        endpoints = await self.connectors.ehr.discover_endpoints(persisted.iss)
+        session = SmartLaunchSession(
+            request=SmartLaunchRequest(
+                iss=persisted.iss,
+                client_id=persisted.client_id,
+                redirect_uri=persisted.redirect_uri,
+                scope=persisted.scope,
+                launch=persisted.launch,
+                patient_id=persisted.patient_id,
+                encounter_id=persisted.encounter_id,
+                state=persisted.state,
+            ),
+            endpoints=endpoints,
+            state=persisted.state,
+            code_verifier=persisted.code_verifier,
+            authorize_url=persisted.authorize_url,
+            metadata=persisted.metadata,
+        )
+
+        token_set, launch_context = await self.connectors.ehr.complete_sandbox_launch(
+            callback_url=callback_url,
+            session=session,
+        )
+        token_record = self.store.save_smart_token_state(
+            SmartTokenStateRecord(
+                session_id=persisted.id,
+                iss=launch_context.iss,
+                token_type=token_set.token_type,
+                access_token=token_set.access_token,
+                refresh_token=token_set.refresh_token,
+                scope=token_set.scope,
+                expires_in=token_set.expires_in,
+                patient_id=token_set.patient_id,
+                encounter_id=token_set.encounter_id,
+                metadata={"mode": token_set.metadata.get("mode", "")},
+            )
+        )
+        return token_record, launch_context
+
     async def invoke_scenario(
         self,
         *,
@@ -243,7 +368,13 @@ class ClinicalClawService:
             requested_by=requested_by,
             external_patient_id=external_patient_id,
         )
-        prompt = self.build_prompt(task, scenario, connector_context=connector_context)
+        memory_context = self.build_memory_context(scenario.id)
+        prompt = self.build_prompt(
+            task,
+            scenario,
+            connector_context=connector_context,
+            memory_context=memory_context,
+        )
 
         try:
             self.store.update_task_status(task_run.id, "running")
@@ -266,6 +397,15 @@ class ClinicalClawService:
                     },
                 )
             )
+            result_text = result.result if isinstance(result.result, str) else str(result.result)
+            self._record_run_memory(
+                scenario=scenario,
+                task_run_id=task_run.id,
+                outcome=MemoryOutcome.success,
+                summary=f"Scenario completed with status {result.status}.",
+                guidance="Reuse the same connector path and keep outputs review-ready before any filing.",
+                content=result_text[:1500],
+            )
             return ScenarioExecutionResult(
                 scenario=scenario,
                 task_run_id=task_run.id,
@@ -274,7 +414,7 @@ class ClinicalClawService:
                 access_event_ids=list(self.store.tasks[task_run.id].access_event_ids),
                 result=result,
             )
-        except Exception:
+        except Exception as exc:
             self.store.update_task_status(task_run.id, "failed")
             self.store.add_access_event(
                 AccessEventRecord(
@@ -287,6 +427,14 @@ class ClinicalClawService:
                     actor=requested_by,
                     details={"scenario_id": scenario.id},
                 )
+            )
+            self._record_run_memory(
+                scenario=scenario,
+                task_run_id=task_run.id,
+                outcome=MemoryOutcome.failure,
+                summary=f"Scenario failed: {type(exc).__name__}",
+                guidance="Check connector availability, patient context, and scenario constraints before retrying.",
+                content=str(exc)[:1500],
             )
             raise
 

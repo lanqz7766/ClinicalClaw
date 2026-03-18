@@ -54,6 +54,11 @@ class AccessOutcome(str, Enum):
     failed = "failed"
 
 
+class MemoryOutcome(str, Enum):
+    success = "success"
+    failure = "failure"
+
+
 class DataClassification(str, Enum):
     phi = "phi"
     deidentified = "deidentified"
@@ -218,3 +223,46 @@ class CreateTaskRunRequest(BaseModel):
     case_id: str | None = None
     external_patient_id: str | None = None
     note: str | None = None
+
+
+class RunMemoryRecord(BaseModel):
+    id: str = Field(default_factory=lambda: f"memory_{uuid4().hex[:12]}")
+    scenario_id: str
+    task_run_id: str | None = None
+    outcome: MemoryOutcome
+    summary: str
+    guidance: str
+    content: str = ""
+    created_at: datetime = Field(default_factory=utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SmartLaunchSessionRecord(BaseModel):
+    id: str = Field(default_factory=lambda: f"launch_{uuid4().hex[:12]}")
+    iss: str
+    state: str
+    authorize_url: str
+    client_id: str
+    redirect_uri: str
+    scope: str
+    launch: str | None = None
+    patient_id: str | None = None
+    encounter_id: str | None = None
+    code_verifier: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SmartTokenStateRecord(BaseModel):
+    id: str = Field(default_factory=lambda: f"token_{uuid4().hex[:12]}")
+    session_id: str | None = None
+    iss: str
+    token_type: str = "Bearer"
+    access_token: str
+    refresh_token: str | None = None
+    scope: str = ""
+    expires_in: int | None = None
+    patient_id: str | None = None
+    encounter_id: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)

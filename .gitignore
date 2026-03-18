@@ -28,6 +28,7 @@ coverage.xml
 
 # ClawAgents runtime
 .clawagents/
+.clinicalclaw/
 
 # Environment
 .env
