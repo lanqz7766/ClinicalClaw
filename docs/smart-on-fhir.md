@@ -60,9 +60,17 @@ and normalize them into a `PatientChartBundle`.
 
 For local development, the example script can auto-complete the SMART Launcher redirect flow without opening a browser by calling the authorize URL with demo `login_success` and `auth_success` parameters and then persisting the resulting callback into SQLite.
 
+ClinicalClaw now also records SMART live integration outcomes into run memory:
+
+- launch/token success or failure under `smart_live_launch_validation`
+- read-path success or failure under `smart_live_read_validation`
+- token refresh success or failure under `smart_live_token_validation`
+
+These memories can be injected into later scenario prompts when EHR read access is enabled, so validated SMART behavior and recent failures influence future scenario execution.
+
 ## What Is Still Missing
 
 - real Epic sandbox credentials and registration
-- automatic refresh-token handling
+- production-grade refresh-token lifecycle policy
 - Epic-specific launch peculiarities
 - secure secret storage

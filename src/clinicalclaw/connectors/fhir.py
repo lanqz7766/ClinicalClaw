@@ -275,6 +275,59 @@ class SmartFHIRConnector:
             metadata={"mode": self.mode.value},
         )
 
+    async def refresh_access_token(
+        self,
+        *,
+        refresh_token: str,
+        scope: str | None = None,
+        iss: str | None = None,
+    ) -> SmartTokenSet:
+        if not refresh_token:
+            raise ConnectorError("SMART refresh token is required")
+
+        if self.mode == ConnectorMode.mock:
+            token_set = SmartTokenSet(
+                access_token="mock-refreshed-access-token",
+                token_type="Bearer",
+                expires_in=3600,
+                scope=scope or self.scope,
+                refresh_token=refresh_token,
+                patient_id="mock-patient-001",
+                encounter_id="mock-encounter-001",
+                metadata={"mode": self.mode.value, "refresh": "mock"},
+            )
+            self.access_token = token_set.access_token
+            return token_set
+
+        endpoints = await self.discover_endpoints(iss)
+        payload = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": self.client_id,
+        }
+        if scope or self.scope:
+            payload["scope"] = scope or self.scope
+        if self.client_secret:
+            payload["client_secret"] = self.client_secret
+
+        token_payload = await self._post_form(endpoints.token_url, payload)
+        token_set = SmartTokenSet(
+            access_token=token_payload.get("access_token", ""),
+            token_type=token_payload.get("token_type", "Bearer"),
+            expires_in=token_payload.get("expires_in"),
+            scope=token_payload.get("scope", scope or self.scope),
+            refresh_token=token_payload.get("refresh_token", refresh_token),
+            patient_id=token_payload.get("patient"),
+            encounter_id=token_payload.get("encounter"),
+            id_token=token_payload.get("id_token"),
+            issued_token_type=token_payload.get("issued_token_type"),
+            metadata={"mode": self.mode.value, "refresh": "oauth2"},
+        )
+        if not token_set.access_token:
+            raise ConnectorError("SMART refresh succeeded but no access_token was returned")
+        self.access_token = token_set.access_token
+        return token_set
+
     async def fetch_patient(self, patient_id: str) -> PatientSummary:
         if self.mode == ConnectorMode.mock:
             return PatientSummary(

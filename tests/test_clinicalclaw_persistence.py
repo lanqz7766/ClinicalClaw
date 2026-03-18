@@ -4,8 +4,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from clinicalclaw.config import ClinicalClawSettings
+from clinicalclaw.connectors.base import SmartTokenSet
 from clinicalclaw.execution import ClinicalClawService
-from clinicalclaw.models import MemoryOutcome, RunMemoryRecord
+from clinicalclaw.models import MemoryOutcome, RunMemoryRecord, SmartTokenStateRecord
 from clinicalclaw.store import SQLiteStore
 
 
@@ -143,3 +144,72 @@ async def test_validate_smart_read_records_failure_memory(tmp_path):
     assert len(memories) >= 1
     assert memories[0].outcome == MemoryOutcome.failure
     assert "sandbox read exploded" in memories[0].content
+
+
+@pytest.mark.asyncio
+async def test_scenario_prompt_includes_smart_live_memory(tmp_path):
+    settings = _settings(tmp_path)
+    service = ClinicalClawService(settings=settings)
+    service.store.add_run_memory(
+        RunMemoryRecord(
+            scenario_id=service.SMART_LIVE_READ_MEMORY_ID,
+            outcome=MemoryOutcome.success,
+            summary="SMART live read succeeded for patient patient-123.",
+            guidance="Reuse the validated SMART issuer before falling back to mock data.",
+            content="diagnostic_reports=3",
+        )
+    )
+
+    scenario = service.get_scenario("diagnostic_prep")
+    assert scenario is not None
+    prompt = service.build_prompt(
+        "prepare brief",
+        scenario,
+        memory_context=service.build_memory_context("diagnostic_prep") + service.build_integration_memory_context(scenario),
+    )
+
+    assert "Relevant SMART live integration memory" in prompt
+    assert "Reuse the validated SMART issuer" in prompt
+
+
+@pytest.mark.asyncio
+async def test_ensure_active_smart_token_refreshes_expired_token(tmp_path):
+    settings = _settings(tmp_path)
+    service = ClinicalClawService(settings=settings)
+    expired = service.store.save_smart_token_state(
+        SmartTokenStateRecord(
+            session_id="launch-123",
+            iss="https://sandbox.example.org",
+            access_token="expired-access-token",
+            refresh_token="refresh-123",
+            scope="launch/patient patient/*.read",
+            expires_in=1,
+            metadata={"mode": "sandbox"},
+        )
+    )
+    expired.created_at = expired.created_at.replace(year=2024)
+    service.store.save_smart_token_state(expired)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            service.connectors.ehr,
+            "refresh_access_token",
+            AsyncMock(
+                return_value=SmartTokenSet(
+                    access_token="refreshed-access-token",
+                    refresh_token="refresh-456",
+                    expires_in=3600,
+                    scope="launch/patient patient/*.read",
+                    patient_id="patient-123",
+                    metadata={"mode": "sandbox"},
+                )
+            ),
+        )
+        refreshed = await service.ensure_active_smart_token(iss="https://sandbox.example.org")
+
+    assert refreshed is not None
+    assert refreshed.access_token == "refreshed-access-token"
+    assert service.connectors.ehr.access_token == "refreshed-access-token"
+    memories = service.store.list_run_memories(service.SMART_LIVE_TOKEN_MEMORY_ID, limit=5)
+    assert len(memories) >= 1
+    assert memories[0].outcome == MemoryOutcome.success

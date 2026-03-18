@@ -196,6 +196,15 @@ class EHRConnector(Protocol):
     async def validate_capabilities(self, required: list[str], iss: str | None = None) -> list[str]:
         ...
 
+    async def refresh_access_token(
+        self,
+        *,
+        refresh_token: str,
+        scope: str | None = None,
+        iss: str | None = None,
+    ) -> SmartTokenSet:
+        ...
+
     async def begin_sandbox_launch(
         self,
         *,

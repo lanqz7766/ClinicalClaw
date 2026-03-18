@@ -46,6 +46,7 @@ class ScenarioExecutionResult:
 class ClinicalClawService:
     SMART_LIVE_LAUNCH_MEMORY_ID = "smart_live_launch_validation"
     SMART_LIVE_READ_MEMORY_ID = "smart_live_read_validation"
+    SMART_LIVE_TOKEN_MEMORY_ID = "smart_live_token_validation"
 
     def __init__(
         self,
@@ -59,6 +60,7 @@ class ClinicalClawService:
         self.store = store or SQLiteStore(self.settings.database_path)
         self.connectors = connectors or build_connector_bundle(self.settings)
         self.store.bootstrap_demo_data(list(self.scenario_map.values()))
+        self._restore_latest_smart_token()
 
     def get_scenario(self, scenario_id: str | None) -> ScenarioSpec | None:
         if not scenario_id:
@@ -114,6 +116,34 @@ class ClinicalClawService:
             )
         return "\n".join(lines) + "\n\n"
 
+    def build_integration_memory_context(self, scenario: ScenarioSpec) -> str:
+        sections: list[str] = []
+        if scenario.policy.connectors.ehr.value == "read":
+            memories = self.store.list_run_memories(
+                self.SMART_LIVE_READ_MEMORY_ID,
+                limit=self.settings.memory_history_limit,
+            )
+            if memories:
+                sections.append("Relevant SMART live integration memory:")
+                for memory in memories:
+                    sections.append(
+                        f"- [{memory.outcome.value}] {memory.summary} Guidance: {memory.guidance}"
+                    )
+        if not sections:
+            return ""
+        return "\n".join(sections) + "\n\n"
+
+    def _restore_latest_smart_token(self) -> None:
+        if self.settings.ehr_connector_mode == "mock":
+            return
+
+        configured_iss = self.settings.fhir_base_url.rstrip("/")
+        for token_state in self.store.list_smart_token_states(limit=20):
+            if configured_iss and token_state.iss.rstrip("/") != configured_iss:
+                continue
+            self.connectors.ehr.access_token = token_state.access_token
+            return
+
     async def collect_connector_context(
         self,
         *,
@@ -125,6 +155,7 @@ class ClinicalClawService:
         sections: list[str] = []
 
         if scenario.policy.connectors.ehr.value == "read" and external_patient_id:
+            await self.ensure_active_smart_token()
             chart = await self.connectors.ehr.fetch_patient_chart(patient_id=external_patient_id)
             self.store.add_access_event(
                 AccessEventRecord(
@@ -337,6 +368,120 @@ class ClinicalClawService:
             },
         )
 
+    def _record_smart_token_memory(
+        self,
+        *,
+        outcome: MemoryOutcome,
+        summary: str,
+        guidance: str,
+        content: str,
+        iss: str,
+        source_token_id: str,
+        refreshed_token_id: str | None = None,
+    ) -> None:
+        self._record_memory(
+            scenario_id=self.SMART_LIVE_TOKEN_MEMORY_ID,
+            task_run_id=source_token_id,
+            outcome=outcome,
+            summary=summary,
+            guidance=guidance,
+            content=content,
+            metadata={
+                "integration": "smart",
+                "phase": "token",
+                "iss": iss,
+                "source_token_id": source_token_id,
+                "refreshed_token_id": refreshed_token_id or "",
+            },
+        )
+
+    def get_latest_smart_token_state(self, *, iss: str | None = None) -> SmartTokenStateRecord | None:
+        for token_state in self.store.list_smart_token_states(limit=20):
+            if iss and token_state.iss.rstrip("/") != iss.rstrip("/"):
+                continue
+            return token_state
+        return None
+
+    async def ensure_active_smart_token(
+        self,
+        *,
+        iss: str | None = None,
+        skew_seconds: int = 60,
+    ) -> SmartTokenStateRecord | None:
+        resolved_iss = (iss or self.settings.fhir_base_url).rstrip("/")
+        token_state = self.get_latest_smart_token_state(iss=resolved_iss or None)
+        if not token_state:
+            return None
+
+        self.connectors.ehr.access_token = token_state.access_token
+        if not token_state.is_expired(skew_seconds=skew_seconds):
+            return token_state
+
+        if not token_state.refresh_token:
+            self._record_smart_token_memory(
+                outcome=MemoryOutcome.failure,
+                summary="SMART token expired and no refresh token was available.",
+                guidance=(
+                    "Request offline access or run a fresh SMART launch before attempting connector reads "
+                    "after expiry."
+                ),
+                content=f"token_id={token_state.id}; iss={token_state.iss}",
+                iss=token_state.iss,
+                source_token_id=token_state.id,
+            )
+            raise ValueError("SMART token expired and no refresh token is available")
+
+        try:
+            refreshed = await self.connectors.ehr.refresh_access_token(
+                refresh_token=token_state.refresh_token,
+                scope=token_state.scope,
+                iss=token_state.iss,
+            )
+            refreshed_record = self.store.save_smart_token_state(
+                SmartTokenStateRecord(
+                    session_id=token_state.session_id,
+                    iss=token_state.iss,
+                    token_type=refreshed.token_type,
+                    access_token=refreshed.access_token,
+                    refresh_token=refreshed.refresh_token,
+                    scope=refreshed.scope,
+                    expires_in=refreshed.expires_in,
+                    patient_id=refreshed.patient_id or token_state.patient_id,
+                    encounter_id=refreshed.encounter_id or token_state.encounter_id,
+                    metadata={
+                        "mode": refreshed.metadata.get("mode", ""),
+                        "refreshed_from": token_state.id,
+                    },
+                )
+            )
+            self.connectors.ehr.access_token = refreshed_record.access_token
+            self._record_smart_token_memory(
+                outcome=MemoryOutcome.success,
+                summary=f"SMART token refresh succeeded for issuer {token_state.iss}.",
+                guidance=(
+                    "Reuse the latest refreshed token state for sandbox reads and keep monitoring expiry before "
+                    "long-running scenario execution."
+                ),
+                content=f"source_token_id={token_state.id}; refreshed_token_id={refreshed_record.id}",
+                iss=token_state.iss,
+                source_token_id=token_state.id,
+                refreshed_token_id=refreshed_record.id,
+            )
+            return refreshed_record
+        except Exception as exc:
+            self._record_smart_token_memory(
+                outcome=MemoryOutcome.failure,
+                summary=f"SMART token refresh failed: {type(exc).__name__}",
+                guidance=(
+                    "Fall back to a fresh SMART launch if refresh fails or the sandbox does not issue refresh "
+                    "tokens for the current scope."
+                ),
+                content=str(exc)[:1500],
+                iss=token_state.iss,
+                source_token_id=token_state.id,
+            )
+            raise
+
     async def validate_smart_read(
         self,
         *,
@@ -345,6 +490,7 @@ class ClinicalClawService:
         iss: str | None = None,
     ) -> PatientChartBundle:
         try:
+            await self.ensure_active_smart_token(iss=iss, skew_seconds=60)
             chart = await self.connectors.ehr.fetch_patient_chart(
                 patient_id=patient_id,
                 encounter_id=encounter_id,
@@ -603,7 +749,10 @@ class ClinicalClawService:
             requested_by=requested_by,
             external_patient_id=external_patient_id,
         )
-        memory_context = self.build_memory_context(scenario.id)
+        memory_context = (
+            self.build_memory_context(scenario.id)
+            + self.build_integration_memory_context(scenario)
+        )
         prompt = self.build_prompt(
             task,
             scenario,

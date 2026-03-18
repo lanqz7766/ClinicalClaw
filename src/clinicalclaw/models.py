@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -268,3 +268,14 @@ class SmartTokenStateRecord(BaseModel):
     encounter_id: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def expires_at(self) -> datetime | None:
+        if self.expires_in is None:
+            return None
+        return self.created_at + timedelta(seconds=self.expires_in)
+
+    def is_expired(self, skew_seconds: int = 60) -> bool:
+        expires_at = self.expires_at()
+        if expires_at is None:
+            return False
+        return utc_now() >= (expires_at - timedelta(seconds=skew_seconds))
