@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from clinicalclaw.config import ClinicalClawSettings, load_settings
+from clinicalclaw.connectors import ConnectorBundle, build_connector_bundle
+from clinicalclaw.connectors.base import PatientChartBundle
 from clinicalclaw.models import (
     AccessAction,
     AccessEventRecord,
@@ -36,10 +38,12 @@ class ClinicalClawService:
         settings: ClinicalClawSettings | None = None,
         store: MemoryStore | None = None,
         scenario_map: dict[str, ScenarioSpec] | None = None,
+        connectors: ConnectorBundle | None = None,
     ) -> None:
         self.settings = settings or load_settings()
         self.scenario_map = scenario_map or load_scenario_map(self.settings.scenario_dir)
         self.store = store or MemoryStore()
+        self.connectors = connectors or build_connector_bundle(self.settings)
         self.store.bootstrap_demo_data(list(self.scenario_map.values()))
 
     def get_scenario(self, scenario_id: str | None) -> ScenarioSpec | None:
@@ -47,7 +51,12 @@ class ClinicalClawService:
             return None
         return self.scenario_map.get(scenario_id)
 
-    def build_prompt(self, task: str, scenario: ScenarioSpec) -> str:
+    def build_prompt(
+        self,
+        task: str,
+        scenario: ScenarioSpec,
+        connector_context: str = "",
+    ) -> str:
         input_names = ", ".join(item.name for item in scenario.inputs) or "none"
         output_names = ", ".join(item.name for item in scenario.outputs) or "none"
         failure_rules = "\n".join(
@@ -69,6 +78,7 @@ class ClinicalClawService:
             f"Review gate: {scenario.review.reviewer_role}; required={scenario.review.required}\n"
             "Failure handling rules:\n"
             f"{failure_rules}\n\n"
+            f"{connector_context}"
             "Task request:\n"
             f"{task}\n\n"
             "Constraints:\n"
@@ -76,6 +86,74 @@ class ClinicalClawService:
             "- Do not claim write-back completed.\n"
             "- Return a review-ready result with missing-data flags when needed."
         )
+
+    async def collect_connector_context(
+        self,
+        *,
+        task_run_id: str,
+        scenario: ScenarioSpec,
+        requested_by: str,
+        external_patient_id: str | None,
+    ) -> str:
+        sections: list[str] = []
+
+        if scenario.policy.connectors.ehr.value == "read" and external_patient_id:
+            chart = await self.connectors.ehr.fetch_patient_chart(patient_id=external_patient_id)
+            self.store.add_access_event(
+                AccessEventRecord(
+                    task_run_id=task_run_id,
+                    system=self.connectors.ehr.connector_name,
+                    action=AccessAction.read,
+                    resource_type="PatientChartBundle",
+                    resource_id=external_patient_id,
+                    outcome=AccessOutcome.success,
+                    actor=requested_by,
+                    details={"mode": self.connectors.ehr.mode.value},
+                )
+            )
+            sections.append(self._format_chart_context(chart))
+
+        if scenario.policy.connectors.imaging.value == "read" and external_patient_id:
+            studies = await self.connectors.imaging.search_studies(patient_id=external_patient_id)
+            self.store.add_access_event(
+                AccessEventRecord(
+                    task_run_id=task_run_id,
+                    system=self.connectors.imaging.connector_name,
+                    action=AccessAction.query,
+                    resource_type="ImagingStudy",
+                    resource_id=external_patient_id,
+                    outcome=AccessOutcome.success,
+                    actor=requested_by,
+                    details={"study_count": len(studies), "mode": self.connectors.imaging.mode.value},
+                )
+            )
+            sections.append(self._format_imaging_context(studies))
+
+        if not sections:
+            return ""
+        return "Connector context:\n" + "\n\n".join(sections) + "\n\n"
+
+    def _format_chart_context(self, chart: PatientChartBundle) -> str:
+        return (
+            "FHIR chart summary:\n"
+            f"- patient: {chart.patient.display_name} ({chart.patient.patient_id})\n"
+            f"- encounter: {chart.encounter.encounter_id if chart.encounter else 'none'}\n"
+            f"- problems: {', '.join(chart.problems) or 'none'}\n"
+            f"- medications: {', '.join(chart.medications) or 'none'}\n"
+            f"- observations: {', '.join(chart.observations) or 'none'}\n"
+            f"- diagnostic reports: {', '.join(ref.resource_id for ref in chart.diagnostic_reports) or 'none'}\n"
+            f"- imaging studies: {', '.join(ref.resource_id for ref in chart.imaging_studies) or 'none'}"
+        )
+
+    def _format_imaging_context(self, studies: list[Any]) -> str:
+        if not studies:
+            return "Imaging summary:\n- no studies returned"
+        lines = ["Imaging summary:"]
+        for study in studies[:5]:
+            lines.append(
+                f"- {study.study_instance_uid} | {study.modality} | {study.description} | series={study.series_count}"
+            )
+        return "\n".join(lines)
 
     def _create_task_request(
         self,
@@ -159,7 +237,13 @@ class ClinicalClawService:
         self._record_launch_event(task_run.id, scenario, requested_by)
 
         agent = build_agent_for_scenario(self.settings, scenario, model=llm)
-        prompt = self.build_prompt(task, scenario)
+        connector_context = await self.collect_connector_context(
+            task_run_id=task_run.id,
+            scenario=scenario,
+            requested_by=requested_by,
+            external_patient_id=external_patient_id,
+        )
+        prompt = self.build_prompt(task, scenario, connector_context=connector_context)
 
         try:
             self.store.update_task_status(task_run.id, "running")

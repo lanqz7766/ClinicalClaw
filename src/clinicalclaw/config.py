@@ -46,9 +46,15 @@ class ClinicalClawSettings(BaseSettings):
     scenario_dir: str = Field(default="scenarios", alias="CLINICALCLAW_SCENARIO_DIR")
     artifact_dir: str = Field(default=".clinicalclaw/artifacts", alias="CLINICALCLAW_ARTIFACT_DIR")
     log_level: str = Field(default="info", alias="CLINICALCLAW_LOG_LEVEL")
+    connector_timeout_s: float = Field(default=15.0, alias="CLINICALCLAW_CONNECTOR_TIMEOUT_S")
+    ehr_connector_mode: str = Field(default="mock", alias="CLINICALCLAW_EHR_CONNECTOR_MODE")
+    imaging_connector_mode: str = Field(default="mock", alias="CLINICALCLAW_IMAGING_CONNECTOR_MODE")
+    fhir_base_url: str = Field(default="", alias="CLINICALCLAW_FHIR_BASE_URL")
+    fhir_access_token: str = Field(default="", alias="CLINICALCLAW_FHIR_ACCESS_TOKEN")
+    dicomweb_base_url: str = Field(default="", alias="CLINICALCLAW_DICOMWEB_BASE_URL")
+    dicomweb_access_token: str = Field(default="", alias="CLINICALCLAW_DICOMWEB_ACCESS_TOKEN")
 
 
 def load_settings() -> ClinicalClawSettings:
     _discover_env_file()
     return ClinicalClawSettings(_env_file=_env_file) if _env_file else ClinicalClawSettings()
-

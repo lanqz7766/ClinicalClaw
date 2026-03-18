@@ -88,6 +88,20 @@ The initial scenario drafts are:
 
 These are draft workflow specs, not production clinical logic.
 
+## Connector Layer
+
+ClinicalClaw now includes a read-only connector abstraction:
+
+- `EHRConnector`
+- `ImagingConnector`
+
+Default mode is `mock`, which gives stable local development without requiring real FHIR or DICOMweb credentials. The current SMART on FHIR layer includes a minimal read-only skeleton for:
+
+- launch context
+- patient fetch
+- encounter fetch
+- chart bundle assembly
+
 ## Upstream Base
 
 This repository includes code copied from [x1jiang/clawagents_py](https://github.com/x1jiang/clawagents_py). The runtime remains in `src/clawagents` so we can reuse its gateway, queueing, tool registry, sandbox, and agent loop while layering hospital-specific platform concerns in `src/clinicalclaw`.

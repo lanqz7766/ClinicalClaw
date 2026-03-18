@@ -1,0 +1,31 @@
+from clinicalclaw.connectors.base import (
+    ConnectorMode,
+    ConnectorBundle,
+    ConnectorError,
+    EHRConnector,
+    ImagingConnector,
+    LaunchContext,
+    PatientChartBundle,
+    PatientSummary,
+    EncounterSummary,
+    ResourceReference,
+    ImagingStudySummary,
+    StudyMetadata,
+)
+from clinicalclaw.connectors.factory import build_connector_bundle
+
+__all__ = [
+    "ConnectorMode",
+    "ConnectorBundle",
+    "ConnectorError",
+    "EHRConnector",
+    "ImagingConnector",
+    "LaunchContext",
+    "PatientChartBundle",
+    "PatientSummary",
+    "EncounterSummary",
+    "ResourceReference",
+    "ImagingStudySummary",
+    "StudyMetadata",
+    "build_connector_bundle",
+]

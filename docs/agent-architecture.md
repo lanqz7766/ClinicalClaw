@@ -24,8 +24,10 @@ ClinicalClaw currently runs with two execution paths on top of the vendored `cla
 - entrypoint: `clinicalclaw.execution.ClinicalClawService`
 - responsibility:
   - load scenario definitions
+  - load normalized connectors
   - create a `TaskRunRecord`
   - enforce tool policy
+  - collect read-only connector context
   - inject scenario instructions into the prompt
   - mark the run as `in_review` when human review is required
   - create placeholder artifact records and access events
@@ -37,6 +39,7 @@ ClinicalClaw currently runs with two execution paths on top of the vendored `cla
   - `imaging_qc`
 - current control surface:
   - tool allowlist and blocklist
+  - read-only connector inputs
   - connector permission summary in prompt
   - review gate in prompt and task state
   - max iteration limit per scenario
