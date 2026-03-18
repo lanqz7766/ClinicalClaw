@@ -117,7 +117,16 @@ class MemoryStore:
         task.updated_at = utc_now()
         if note is not None:
             task.note = note
+        self._sync_artifact_statuses(task)
         return task
+
+    def get_task(self, task_id: str) -> TaskRunRecord | None:
+        return self.tasks.get(task_id)
+
+    def list_tasks_by_status(self, status: TaskRunStatus, limit: int = 20) -> list[TaskRunRecord]:
+        tasks = [task for task in self.tasks.values() if task.status == status]
+        tasks.sort(key=lambda item: item.updated_at, reverse=True)
+        return tasks[:limit]
 
     def add_access_event(self, event: AccessEventRecord) -> AccessEventRecord:
         self.access_events[event.id] = event
@@ -133,6 +142,7 @@ class MemoryStore:
             task = self.tasks[artifact.task_run_id]
             task.artifact_ids.append(artifact.id)
             task.updated_at = utc_now()
+            self._sync_artifact_statuses(task)
         return artifact
 
     def add_run_memory(self, memory: RunMemoryRecord) -> RunMemoryRecord:
@@ -159,6 +169,25 @@ class MemoryStore:
         token_states = list(self.smart_token_states.values())
         token_states.sort(key=lambda item: item.created_at, reverse=True)
         return token_states[:limit]
+
+    def _sync_artifact_statuses(self, task: TaskRunRecord) -> None:
+        target = None
+        if task.status == TaskRunStatus.in_review:
+            target = ArtifactStatus.in_review
+        elif task.status == TaskRunStatus.approved:
+            target = ArtifactStatus.approved
+        elif task.status == TaskRunStatus.filed:
+            target = ArtifactStatus.exported
+        elif task.status == TaskRunStatus.rejected:
+            target = ArtifactStatus.draft
+
+        if target is None:
+            return
+
+        for artifact_id in task.artifact_ids:
+            artifact = self.artifacts.get(artifact_id)
+            if artifact:
+                artifact.status = target
 
 
 class SQLiteStore(MemoryStore):
@@ -341,6 +370,10 @@ class SQLiteStore(MemoryStore):
     def update_task_status(self, task_id: str, status: str, note: str | None = None) -> TaskRunRecord:
         task = super().update_task_status(task_id, status, note=note)
         self._persist_task(task)
+        for artifact_id in task.artifact_ids:
+            artifact = self.artifacts.get(artifact_id)
+            if artifact:
+                self._persist_artifact(artifact)
         return task
 
     def add_access_event(self, event: AccessEventRecord) -> AccessEventRecord:

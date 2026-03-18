@@ -45,6 +45,8 @@ class AccessAction(str, Enum):
     export = "export"
     launch = "launch"
     query = "query"
+    review = "review"
+    file = "file"
 
 
 class AccessOutcome(str, Enum):

@@ -115,6 +115,23 @@ ClinicalClaw now persists local development state in SQLite by default:
 
 Default state path: `.clinicalclaw/state.db`
 
+## Review Workflow
+
+ClinicalClaw now includes a strict review queue and task state machine:
+
+- `in_review`
+- `approved`
+- `rejected`
+- `filed`
+
+The queue is backed by persisted `TaskRunRecord` state and synchronized artifact statuses.
+
+## SMART Sandbox Entry
+
+For local SMART sandbox bring-up, see:
+
+- [examples/09_smart_sandbox_entry.py](/Users/qlan/Documents/Agent/ClinicalClaw/examples/09_smart_sandbox_entry.py)
+
 ## Upstream Base
 
 This repository includes code copied from [x1jiang/clawagents_py](https://github.com/x1jiang/clawagents_py). The runtime remains in `src/clawagents` so we can reuse its gateway, queueing, tool registry, sandbox, and agent loop while layering hospital-specific platform concerns in `src/clinicalclaw`.

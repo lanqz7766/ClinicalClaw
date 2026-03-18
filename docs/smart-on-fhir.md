@@ -24,6 +24,8 @@ ClinicalClaw now supports the minimum internal structure needed to move from moc
 
 - `SmartEndpoints`
 - `SmartLaunchRequest`
+- `SmartLaunchSession`
+- `SmartCallbackParams`
 - `SmartTokenSet`
 - `LaunchContext`
 
@@ -40,9 +42,7 @@ and normalize them into a `PatientChartBundle`.
 
 ## What Is Still Missing
 
-- PKCE helper generation
+- real Epic sandbox credentials and registration
 - automatic refresh-token handling
-- SMART capability validation
 - Epic-specific launch peculiarities
-- persistence of token state
 - secure secret storage

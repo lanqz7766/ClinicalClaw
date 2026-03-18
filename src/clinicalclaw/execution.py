@@ -25,6 +25,8 @@ from clinicalclaw.models import (
     ScenarioSpec,
     SmartLaunchSessionRecord,
     SmartTokenStateRecord,
+    TaskRunRecord,
+    TaskRunStatus,
 )
 from clinicalclaw.runtime import build_agent_for_scenario
 from clinicalclaw.scenarios import load_scenario_map
@@ -254,6 +256,79 @@ class ClinicalClawService:
                 content=content,
                 metadata={"scenario_name": scenario.name},
             )
+        )
+
+    def list_review_queue(self, limit: int = 20) -> list[TaskRunRecord]:
+        return self.store.list_tasks_by_status(TaskRunStatus.in_review, limit=limit)
+
+    def transition_task(
+        self,
+        *,
+        task_id: str,
+        target_status: TaskRunStatus,
+        actor: str,
+        note: str | None = None,
+    ) -> TaskRunRecord:
+        task = self.store.get_task(task_id)
+        if not task:
+            raise ValueError(f"Unknown task: {task_id}")
+
+        allowed = {
+            TaskRunStatus.draft: {TaskRunStatus.queued},
+            TaskRunStatus.queued: {TaskRunStatus.running, TaskRunStatus.failed},
+            TaskRunStatus.running: {TaskRunStatus.in_review, TaskRunStatus.approved, TaskRunStatus.failed},
+            TaskRunStatus.in_review: {TaskRunStatus.approved, TaskRunStatus.rejected},
+            TaskRunStatus.approved: {TaskRunStatus.filed},
+            TaskRunStatus.rejected: set(),
+            TaskRunStatus.filed: set(),
+            TaskRunStatus.failed: set(),
+        }
+        if target_status not in allowed[task.status]:
+            raise ValueError(f"Invalid task transition: {task.status.value} -> {target_status.value}")
+
+        from_status = task.status.value
+        updated = self.store.update_task_status(task_id, target_status.value, note=note)
+        action = AccessAction.review if target_status in {TaskRunStatus.in_review, TaskRunStatus.approved, TaskRunStatus.rejected} else AccessAction.file
+        self.store.add_access_event(
+            AccessEventRecord(
+                task_run_id=task_id,
+                system="clinicalclaw",
+                action=action,
+                resource_type="TaskRun",
+                resource_id=task_id,
+                outcome=AccessOutcome.success,
+                actor=actor,
+                details={
+                    "from_status": from_status,
+                    "to_status": target_status.value,
+                    "note": note or "",
+                },
+            )
+        )
+        return updated
+
+    def approve_task(self, task_id: str, actor: str, note: str | None = None) -> TaskRunRecord:
+        return self.transition_task(
+            task_id=task_id,
+            target_status=TaskRunStatus.approved,
+            actor=actor,
+            note=note,
+        )
+
+    def reject_task(self, task_id: str, actor: str, note: str | None = None) -> TaskRunRecord:
+        return self.transition_task(
+            task_id=task_id,
+            target_status=TaskRunStatus.rejected,
+            actor=actor,
+            note=note,
+        )
+
+    def file_task(self, task_id: str, actor: str, note: str | None = None) -> TaskRunRecord:
+        return self.transition_task(
+            task_id=task_id,
+            target_status=TaskRunStatus.filed,
+            actor=actor,
+            note=note,
         )
 
     async def begin_smart_launch(
