@@ -14,6 +14,8 @@ def _settings(tmp_path: Path) -> ClinicalClawSettings:
     return ClinicalClawSettings(
         CLINICALCLAW_DATABASE_PATH=str(tmp_path / "state.db"),
         CLINICALCLAW_MEMORY_HISTORY_LIMIT=5,
+        CLINICALCLAW_EHR_CONNECTOR_MODE="mock",
+        CLINICALCLAW_IMAGING_CONNECTOR_MODE="mock",
         CLINICALCLAW_FHIR_CLIENT_ID="client-123",
         CLINICALCLAW_FHIR_REDIRECT_URI="http://localhost:8765/callback",
     )
@@ -174,7 +176,15 @@ async def test_scenario_prompt_includes_smart_live_memory(tmp_path):
 
 @pytest.mark.asyncio
 async def test_ensure_active_smart_token_refreshes_expired_token(tmp_path):
-    settings = _settings(tmp_path)
+    settings = ClinicalClawSettings(
+        CLINICALCLAW_DATABASE_PATH=str(tmp_path / "state.db"),
+        CLINICALCLAW_MEMORY_HISTORY_LIMIT=5,
+        CLINICALCLAW_EHR_CONNECTOR_MODE="sandbox",
+        CLINICALCLAW_IMAGING_CONNECTOR_MODE="mock",
+        CLINICALCLAW_FHIR_BASE_URL="https://sandbox.example.org",
+        CLINICALCLAW_FHIR_CLIENT_ID="client-123",
+        CLINICALCLAW_FHIR_REDIRECT_URI="http://localhost:8765/callback",
+    )
     service = ClinicalClawService(settings=settings)
     expired = service.store.save_smart_token_state(
         SmartTokenStateRecord(

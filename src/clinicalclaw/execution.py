@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
+from types import SimpleNamespace
 from typing import Any
 
 from clinicalclaw.config import ClinicalClawSettings, load_settings
 from clinicalclaw.connectors import ConnectorBundle, build_connector_bundle
 from clinicalclaw.connectors.base import (
+    ConnectorMode,
     PatientChartBundle,
     SmartEndpoints,
     SmartLaunchRequest,
@@ -31,6 +34,11 @@ from clinicalclaw.models import (
 from clinicalclaw.runtime import build_agent_for_scenario
 from clinicalclaw.scenarios import load_scenario_map
 from clinicalclaw.store import MemoryStore, SQLiteStore
+from clinicalclaw.token_manager import SmartReauthRequiredError
+from clinicalclaw.token_manager import TokenManager
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -59,6 +67,7 @@ class ClinicalClawService:
         self.scenario_map = scenario_map or load_scenario_map(self.settings.scenario_dir)
         self.store = store or SQLiteStore(self.settings.database_path)
         self.connectors = connectors or build_connector_bundle(self.settings)
+        self.token_manager = TokenManager(connector=self.connectors.ehr, store=self.store)
         self.store.bootstrap_demo_data(list(self.scenario_map.values()))
         self._restore_latest_smart_token()
 
@@ -119,16 +128,24 @@ class ClinicalClawService:
     def build_integration_memory_context(self, scenario: ScenarioSpec) -> str:
         sections: list[str] = []
         if scenario.policy.connectors.ehr.value == "read":
-            memories = self.store.list_run_memories(
+            sections.append("Relevant SMART live integration memory:")
+            added = False
+            for memory_type in [
                 self.SMART_LIVE_READ_MEMORY_ID,
-                limit=self.settings.memory_history_limit,
-            )
-            if memories:
-                sections.append("Relevant SMART live integration memory:")
+                self.SMART_LIVE_TOKEN_MEMORY_ID,
+                self.SMART_LIVE_LAUNCH_MEMORY_ID,
+            ]:
+                memories = self.store.list_run_memories(
+                    memory_type,
+                    limit=self.settings.memory_history_limit,
+                )
                 for memory in memories:
                     sections.append(
                         f"- [{memory.outcome.value}] {memory.summary} Guidance: {memory.guidance}"
                     )
+                    added = True
+            if not added:
+                sections = []
         if not sections:
             return ""
         return "\n".join(sections) + "\n\n"
@@ -138,11 +155,13 @@ class ClinicalClawService:
             return
 
         configured_iss = self.settings.fhir_base_url.rstrip("/")
-        for token_state in self.store.list_smart_token_states(limit=20):
-            if configured_iss and token_state.iss.rstrip("/") != configured_iss:
-                continue
+        token_state = self.token_manager.get_latest_token_state(iss=configured_iss or None)
+        if token_state:
             self.connectors.ehr.access_token = token_state.access_token
-            return
+            logger.info(
+                "Restored latest SMART access token into connector state",
+                extra={"token_id": token_state.id, "iss": token_state.iss},
+            )
 
     async def collect_connector_context(
         self,
@@ -396,11 +415,7 @@ class ClinicalClawService:
         )
 
     def get_latest_smart_token_state(self, *, iss: str | None = None) -> SmartTokenStateRecord | None:
-        for token_state in self.store.list_smart_token_states(limit=20):
-            if iss and token_state.iss.rstrip("/") != iss.rstrip("/"):
-                continue
-            return token_state
-        return None
+        return self.token_manager.get_latest_token_state(iss=iss)
 
     async def ensure_active_smart_token(
         self,
@@ -408,78 +423,76 @@ class ClinicalClawService:
         iss: str | None = None,
         skew_seconds: int = 60,
     ) -> SmartTokenStateRecord | None:
+        if self.connectors.ehr.mode == ConnectorMode.mock:
+            logger.info("Skipping SMART token validation for mock EHR connector mode")
+            return None
+
         resolved_iss = (iss or self.settings.fhir_base_url).rstrip("/")
         token_state = self.get_latest_smart_token_state(iss=resolved_iss or None)
         if not token_state:
-            return None
-
-        self.connectors.ehr.access_token = token_state.access_token
-        if not token_state.is_expired(skew_seconds=skew_seconds):
-            return token_state
-
-        if not token_state.refresh_token:
-            self._record_smart_token_memory(
-                outcome=MemoryOutcome.failure,
-                summary="SMART token expired and no refresh token was available.",
-                guidance=(
-                    "Request offline access or run a fresh SMART launch before attempting connector reads "
-                    "after expiry."
-                ),
-                content=f"token_id={token_state.id}; iss={token_state.iss}",
-                iss=token_state.iss,
-                source_token_id=token_state.id,
+            raise SmartReauthRequiredError(
+                reason="No SMART token is available for this environment.",
+                iss=resolved_iss or None,
             )
-            raise ValueError("SMART token expired and no refresh token is available")
 
+        was_expired = token_state.is_expired(skew_seconds=skew_seconds)
+        had_refresh = bool(token_state.refresh_token)
         try:
-            refreshed = await self.connectors.ehr.refresh_access_token(
-                refresh_token=token_state.refresh_token,
-                scope=token_state.scope,
-                iss=token_state.iss,
+            access_token = await self.token_manager.get_valid_access_token(
+                iss=resolved_iss or None,
+                skew_seconds=skew_seconds,
             )
-            refreshed_record = self.store.save_smart_token_state(
-                SmartTokenStateRecord(
-                    session_id=token_state.session_id,
+            refreshed_state = self.get_latest_smart_token_state(iss=resolved_iss or None)
+            if refreshed_state and refreshed_state.id != token_state.id:
+                self._record_smart_token_memory(
+                    outcome=MemoryOutcome.success,
+                    summary=f"SMART token refresh succeeded for issuer {token_state.iss}.",
+                    guidance=(
+                        "Reuse the latest refreshed token state for sandbox reads and keep monitoring expiry before "
+                        "long-running scenario execution."
+                    ),
+                    content=f"source_token_id={token_state.id}; refreshed_token_id={refreshed_state.id}",
                     iss=token_state.iss,
-                    token_type=refreshed.token_type,
-                    access_token=refreshed.access_token,
-                    refresh_token=refreshed.refresh_token,
-                    scope=refreshed.scope,
-                    expires_in=refreshed.expires_in,
-                    patient_id=refreshed.patient_id or token_state.patient_id,
-                    encounter_id=refreshed.encounter_id or token_state.encounter_id,
-                    metadata={
-                        "mode": refreshed.metadata.get("mode", ""),
-                        "refreshed_from": token_state.id,
-                    },
+                    source_token_id=token_state.id,
+                    refreshed_token_id=refreshed_state.id,
                 )
-            )
-            self.connectors.ehr.access_token = refreshed_record.access_token
-            self._record_smart_token_memory(
-                outcome=MemoryOutcome.success,
-                summary=f"SMART token refresh succeeded for issuer {token_state.iss}.",
-                guidance=(
-                    "Reuse the latest refreshed token state for sandbox reads and keep monitoring expiry before "
-                    "long-running scenario execution."
-                ),
-                content=f"source_token_id={token_state.id}; refreshed_token_id={refreshed_record.id}",
-                iss=token_state.iss,
-                source_token_id=token_state.id,
-                refreshed_token_id=refreshed_record.id,
-            )
-            return refreshed_record
-        except Exception as exc:
-            self._record_smart_token_memory(
-                outcome=MemoryOutcome.failure,
-                summary=f"SMART token refresh failed: {type(exc).__name__}",
-                guidance=(
-                    "Fall back to a fresh SMART launch if refresh fails or the sandbox does not issue refresh "
-                    "tokens for the current scope."
-                ),
-                content=str(exc)[:1500],
-                iss=token_state.iss,
-                source_token_id=token_state.id,
-            )
+                return refreshed_state
+
+            self.connectors.ehr.access_token = access_token
+            return token_state
+        except SmartReauthRequiredError as exc:
+            if was_expired and not had_refresh:
+                logger.warning(
+                    "SMART environment marked no-refresh-capable after expiry without refresh_token",
+                    extra={"token_id": token_state.id, "iss": token_state.iss},
+                )
+                self._record_smart_token_memory(
+                    outcome=MemoryOutcome.failure,
+                    summary="SMART token expired and no refresh token was available.",
+                    guidance=(
+                        "Request offline access or run a fresh SMART launch before attempting connector reads "
+                        "after expiry."
+                    ),
+                    content=f"token_id={token_state.id}; iss={token_state.iss}",
+                    iss=token_state.iss,
+                    source_token_id=token_state.id,
+                )
+            else:
+                self._record_smart_token_memory(
+                    outcome=MemoryOutcome.failure,
+                    summary=exc.reason,
+                    guidance=(
+                        "Fall back to a fresh SMART launch if refresh fails or the sandbox does not issue refresh "
+                        "tokens for the current scope."
+                    ),
+                    content=str(exc)[:1500],
+                    iss=token_state.iss,
+                    source_token_id=token_state.id,
+                )
+                logger.warning(
+                    "SMART fallback to re-authentication triggered",
+                    extra={"token_id": token_state.id, "iss": token_state.iss, "reason": exc.reason},
+                )
             raise
 
     async def validate_smart_read(
@@ -682,9 +695,50 @@ class ClinicalClawService:
                     expires_in=token_set.expires_in,
                     patient_id=token_set.patient_id,
                     encounter_id=token_set.encounter_id,
-                    metadata={"mode": token_set.metadata.get("mode", "")},
+                    metadata={
+                        "mode": token_set.metadata.get("mode", ""),
+                        "refresh_capable": bool(token_set.refresh_token),
+                        "no_refresh_capable": not bool(token_set.refresh_token),
+                    },
                 )
             )
+            logger.info(
+                "SMART initial token acquisition succeeded",
+                extra={
+                    "session_id": persisted.id,
+                    "token_id": token_record.id,
+                    "iss": launch_context.iss,
+                    "has_refresh_token": bool(token_set.refresh_token),
+                },
+            )
+            if not token_set.refresh_token:
+                logger.warning(
+                    "SMART authorization server did not return refresh_token; environment marked no-refresh-capable",
+                    extra={"session_id": persisted.id, "iss": launch_context.iss},
+                )
+                self._record_smart_token_memory(
+                    outcome=MemoryOutcome.failure,
+                    summary="SMART token acquired without refresh_token; environment marked no-refresh-capable.",
+                    guidance=(
+                        "Use a refresh-capable SMART environment or be prepared to trigger a fresh SMART launch "
+                        "after token expiry."
+                    ),
+                    content=f"token_id={token_record.id}; iss={launch_context.iss}",
+                    iss=launch_context.iss,
+                    source_token_id=token_record.id,
+                )
+            else:
+                self._record_smart_token_memory(
+                    outcome=MemoryOutcome.success,
+                    summary="SMART token acquisition included refresh_token support.",
+                    guidance=(
+                        "This environment can refresh tokens automatically after expiry as long as refresh_token "
+                        "remains valid."
+                    ),
+                    content=f"token_id={token_record.id}; iss={launch_context.iss}",
+                    iss=launch_context.iss,
+                    source_token_id=token_record.id,
+                )
             self._record_smart_launch_memory(
                 outcome=MemoryOutcome.success,
                 summary=(
@@ -742,25 +796,24 @@ class ClinicalClawService:
         self.store.update_task_status(task_run.id, "queued")
         self._record_launch_event(task_run.id, scenario, requested_by)
 
-        agent = build_agent_for_scenario(self.settings, scenario, model=llm)
-        connector_context = await self.collect_connector_context(
-            task_run_id=task_run.id,
-            scenario=scenario,
-            requested_by=requested_by,
-            external_patient_id=external_patient_id,
-        )
-        memory_context = (
-            self.build_memory_context(scenario.id)
-            + self.build_integration_memory_context(scenario)
-        )
-        prompt = self.build_prompt(
-            task,
-            scenario,
-            connector_context=connector_context,
-            memory_context=memory_context,
-        )
-
         try:
+            agent = build_agent_for_scenario(self.settings, scenario, model=llm)
+            connector_context = await self.collect_connector_context(
+                task_run_id=task_run.id,
+                scenario=scenario,
+                requested_by=requested_by,
+                external_patient_id=external_patient_id,
+            )
+            memory_context = (
+                self.build_memory_context(scenario.id)
+                + self.build_integration_memory_context(scenario)
+            )
+            prompt = self.build_prompt(
+                task,
+                scenario,
+                connector_context=connector_context,
+                memory_context=memory_context,
+            )
             self.store.update_task_status(task_run.id, "running")
             result = await agent.invoke(prompt, on_event=on_event)
             final_status = "in_review" if scenario.review.required else "approved"
@@ -797,6 +850,37 @@ class ClinicalClawService:
                 artifact_ids=artifact_ids,
                 access_event_ids=list(self.store.tasks[task_run.id].access_event_ids),
                 result=result,
+            )
+        except SmartReauthRequiredError as exc:
+            self.store.update_task_status(task_run.id, "failed")
+            self.store.add_access_event(
+                AccessEventRecord(
+                    task_run_id=task_run.id,
+                    system="clinicalclaw",
+                    action=AccessAction.launch,
+                    resource_type="SMARTAuth",
+                    resource_id=scenario.id,
+                    outcome=AccessOutcome.failed,
+                    actor=requested_by,
+                    details=exc.to_payload(),
+                )
+            )
+            self._record_run_memory(
+                scenario=scenario,
+                task_run_id=task_run.id,
+                outcome=MemoryOutcome.failure,
+                summary="Scenario blocked pending SMART re-authentication.",
+                guidance="Run SMART launch again, then retry the scenario with the refreshed token state.",
+                content=exc.reason,
+            )
+            structured = exc.to_payload()
+            return ScenarioExecutionResult(
+                scenario=scenario,
+                task_run_id=task_run.id,
+                review_required=scenario.review.required,
+                artifact_ids=[],
+                access_event_ids=list(self.store.tasks[task_run.id].access_event_ids),
+                result=SimpleNamespace(status="reauth_required", result=structured, iterations=0),
             )
         except Exception as exc:
             self.store.update_task_status(task_run.id, "failed")

@@ -12,7 +12,10 @@ from clinicalclaw.store import MemoryStore
 
 @pytest.mark.asyncio
 async def test_mock_fhir_connector_returns_chart_bundle():
-    settings = ClinicalClawSettings()
+    settings = ClinicalClawSettings(
+        CLINICALCLAW_EHR_CONNECTOR_MODE="mock",
+        CLINICALCLAW_IMAGING_CONNECTOR_MODE="mock",
+    )
     bundle = build_connector_bundle(settings)
 
     chart = await bundle.ehr.fetch_patient_chart(patient_id="patient-123")
@@ -24,7 +27,10 @@ async def test_mock_fhir_connector_returns_chart_bundle():
 
 @pytest.mark.asyncio
 async def test_service_collects_connector_context_for_read_only_scenario():
-    settings = ClinicalClawSettings()
+    settings = ClinicalClawSettings(
+        CLINICALCLAW_EHR_CONNECTOR_MODE="mock",
+        CLINICALCLAW_IMAGING_CONNECTOR_MODE="mock",
+    )
     service = ClinicalClawService(settings=settings, store=MemoryStore())
     scenario = service.get_scenario("diagnostic_prep")
     assert scenario is not None

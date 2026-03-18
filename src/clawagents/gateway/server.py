@@ -124,8 +124,9 @@ def create_app() -> tuple:
         try:
             result = await enqueue_command_in_lane(lane, execute_graph)
             if scenario_id:
+                success = result.result.status != "reauth_required"
                 return {
-                    "success": True,
+                    "success": success,
                     "lane": lane,
                     "scenario_id": result.scenario.id,
                     "task_run_id": result.task_run_id,
@@ -188,7 +189,9 @@ def create_app() -> tuple:
             try:
                 result = await enqueue_command_in_lane(lane, _execute)
                 if scenario_id:
+                    success = result.result.status != "reauth_required"
                     sse("done", {
+                        "success": success,
                         "lane": lane,
                         "scenario_id": result.scenario.id,
                         "task_run_id": result.task_run_id,

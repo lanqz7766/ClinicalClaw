@@ -152,7 +152,8 @@ async def _handle_chat_send(ws: WebSocket, msg: dict, llm: Any, clinicalclaw: An
         session["messages"].append({"role": "user", "content": task, "timestamp": now_ms, "scenarioId": scenario_id})
         if scenario_id:
             session["messages"].append({"role": "assistant", "content": result.result.result or "", "timestamp": now_ms, "scenarioId": scenario_id})
-            await ws.send_json(make_response(msg["id"], True, {
+            success = result.result.status != "reauth_required"
+            await ws.send_json(make_response(msg["id"], success, {
                 "sessionId": session_id,
                 "lane": lane,
                 "scenarioId": result.scenario.id,
