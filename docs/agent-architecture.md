@@ -52,11 +52,13 @@ ClinicalClaw currently runs with two execution paths on top of the vendored `cla
 - create internal task, artifact, and access-event records in memory
 - enforce scenario tool restrictions during execution
 - keep scenario runs review-gated by default
+- support SMART on FHIR sandbox-ready launch and read skeletons
+- support DICOMweb sandbox-ready QIDO/WADO read skeletons
 
 ## What Is Missing
 
-- no real EHR connector yet
-- no real DICOMweb connector yet
+- no verified Epic sandbox registration or live SMART callback deployment yet
+- no PACS vendor validation for DICOMweb interoperability yet
 - no database persistence yet
 - no actual approval queue UI or API yet
 - no write-back pipeline yet

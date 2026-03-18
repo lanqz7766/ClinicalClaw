@@ -64,6 +64,29 @@ class SmartTokenSet:
 
 
 @dataclass
+class SmartLaunchSession:
+    request: SmartLaunchRequest
+    endpoints: SmartEndpoints
+    state: str
+    code_verifier: str | None = None
+    authorize_url: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class SmartCallbackParams:
+    code: str | None = None
+    state: str | None = None
+    iss: str | None = None
+    launch: str | None = None
+    error: str | None = None
+    error_description: str | None = None
+    patient_id: str | None = None
+    encounter_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class LaunchContext:
     iss: str
     launch: str | None = None
@@ -123,6 +146,32 @@ class StudyMetadata:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class SeriesSummary:
+    study_instance_uid: str
+    series_instance_uid: str
+    modality: str = ""
+    description: str = ""
+    instance_count: int = 0
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class InstanceSummary:
+    study_instance_uid: str
+    series_instance_uid: str
+    sop_instance_uid: str
+    instance_number: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class RetrievedObject:
+    content_type: str
+    data: bytes
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
 class EHRConnector(Protocol):
     connector_name: str
     mode: ConnectorMode
@@ -142,6 +191,31 @@ class EHRConnector(Protocol):
         code_verifier: str | None = None,
         iss: str | None = None,
     ) -> SmartTokenSet:
+        ...
+
+    async def validate_capabilities(self, required: list[str], iss: str | None = None) -> list[str]:
+        ...
+
+    async def begin_sandbox_launch(
+        self,
+        *,
+        iss: str,
+        launch: str | None = None,
+        patient_id: str | None = None,
+        encounter_id: str | None = None,
+        state: str | None = None,
+    ) -> SmartLaunchSession:
+        ...
+
+    def parse_callback(self, callback_url: str) -> SmartCallbackParams:
+        ...
+
+    async def complete_sandbox_launch(
+        self,
+        *,
+        callback_url: str,
+        session: SmartLaunchSession,
+    ) -> tuple[SmartTokenSet, LaunchContext]:
         ...
 
     async def get_launch_context(
@@ -185,12 +259,37 @@ class ImagingConnector(Protocol):
     async def get_study_metadata(self, study_instance_uid: str) -> StudyMetadata:
         ...
 
+    async def search_series(
+        self,
+        *,
+        study_instance_uid: str,
+        modality: str | None = None,
+    ) -> list[SeriesSummary]:
+        ...
+
+    async def search_instances(
+        self,
+        *,
+        study_instance_uid: str,
+        series_instance_uid: str,
+    ) -> list[InstanceSummary]:
+        ...
+
     async def get_series_metadata(
         self,
         *,
         study_instance_uid: str,
         series_instance_uid: str,
     ) -> dict[str, Any]:
+        ...
+
+    async def retrieve_instance(
+        self,
+        *,
+        study_instance_uid: str,
+        series_instance_uid: str,
+        sop_instance_uid: str,
+    ) -> RetrievedObject:
         ...
 
 

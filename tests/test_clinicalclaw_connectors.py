@@ -1,9 +1,11 @@
+import httpx
 import pytest
 
 from clinicalclaw.config import ClinicalClawSettings
 from clinicalclaw.connectors import build_connector_bundle
 from clinicalclaw.connectors.base import ConnectorMode, SmartLaunchRequest
-from clinicalclaw.connectors.fhir import SmartFHIRConnector
+from clinicalclaw.connectors.fhir import SmartFHIRConnector, generate_pkce_pair
+from clinicalclaw.connectors.imaging import DICOMWebConnector
 from clinicalclaw.execution import ClinicalClawService
 from clinicalclaw.store import MemoryStore
 
@@ -142,8 +144,6 @@ async def test_sandbox_smart_connector_token_exchange_and_read_flow():
             )
         return httpx.Response(404, json={"error": "not found"})
 
-    import httpx
-
     connector = SmartFHIRConnector(
         mode=ConnectorMode.sandbox,
         base_url="https://sandbox.example.org",
@@ -169,3 +169,168 @@ async def test_sandbox_smart_connector_token_exchange_and_read_flow():
     assert chart.encounter is not None
     assert chart.encounter.encounter_id == "sandbox-encounter"
     assert chart.diagnostic_reports[0].resource_id == "dr-100"
+
+
+def test_pkce_pair_looks_valid():
+    verifier, challenge = generate_pkce_pair()
+
+    assert len(verifier) >= 43
+    assert len(challenge) >= 43
+    assert "=" not in challenge
+
+
+@pytest.mark.asyncio
+async def test_sandbox_smart_launch_session_and_callback_flow():
+    def handler(request):
+        if request.url.path == "/.well-known/smart-configuration":
+            return httpx.Response(
+                200,
+                json={
+                    "authorization_endpoint": "https://sandbox.example.org/oauth2/authorize",
+                    "token_endpoint": "https://sandbox.example.org/oauth2/token",
+                    "capabilities": ["launch-ehr", "launch-standalone", "client-public"],
+                },
+            )
+        if request.url.path == "/oauth2/token":
+            form = request.content.decode()
+            assert "code_verifier=" in form
+            return httpx.Response(
+                200,
+                json={
+                    "access_token": "sandbox-access-token",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                    "scope": "launch/patient patient/*.read",
+                    "patient": "patient-xyz",
+                    "encounter": "enc-xyz",
+                },
+            )
+        return httpx.Response(404, json={"error": "not found"})
+
+    connector = SmartFHIRConnector(
+        mode=ConnectorMode.sandbox,
+        base_url="https://sandbox.example.org",
+        client_id="client-123",
+        redirect_uri="http://localhost:8765/callback",
+        scope="launch/patient patient/*.read",
+        transport=httpx.MockTransport(handler),
+    )
+
+    session = await connector.begin_sandbox_launch(
+        iss="https://sandbox.example.org",
+        launch="launch-123",
+        state="state-123",
+    )
+    token_set, launch_context = await connector.complete_sandbox_launch(
+        callback_url="http://localhost:8765/callback?code=abc123&state=state-123&iss=https%3A%2F%2Fsandbox.example.org",
+        session=session,
+    )
+
+    assert "launch=launch-123" in session.authorize_url
+    assert token_set.patient_id == "patient-xyz"
+    assert launch_context.patient_id == "patient-xyz"
+
+
+@pytest.mark.asyncio
+async def test_sandbox_smart_capability_validation():
+    def handler(request):
+        if request.url.path == "/.well-known/smart-configuration":
+            return httpx.Response(
+                200,
+                json={
+                    "authorization_endpoint": "https://sandbox.example.org/oauth2/authorize",
+                    "token_endpoint": "https://sandbox.example.org/oauth2/token",
+                    "capabilities": ["launch-standalone", "client-public"],
+                },
+            )
+        return httpx.Response(404, json={"error": "not found"})
+
+    connector = SmartFHIRConnector(
+        mode=ConnectorMode.sandbox,
+        base_url="https://sandbox.example.org",
+        transport=httpx.MockTransport(handler),
+    )
+    missing = await connector.validate_capabilities(["launch-ehr", "client-public"], "https://sandbox.example.org")
+    assert missing == ["launch-ehr"]
+
+
+@pytest.mark.asyncio
+async def test_sandbox_dicomweb_qido_and_wado_flow():
+    def handler(request):
+        if request.url.path == "/studies":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "0020000D": {"Value": ["1.2.3.study"]},
+                        "00100020": {"Value": ["patient-123"]},
+                        "00080061": {"Value": ["CT"]},
+                        "00081030": {"Value": ["CT Chest"]},
+                        "00080020": {"Value": ["20260318"]},
+                        "00201206": {"Value": [2]},
+                    }
+                ],
+            )
+        if request.url.path == "/studies/1.2.3.study/series":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "0020000E": {"Value": ["1.2.3.series"]},
+                        "00080060": {"Value": ["CT"]},
+                        "0008103E": {"Value": ["Axial Lung"]},
+                        "00201209": {"Value": [120]},
+                    }
+                ],
+            )
+        if request.url.path == "/studies/1.2.3.study/series/1.2.3.series/instances":
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "00080018": {"Value": ["1.2.3.instance"]},
+                        "00200013": {"Value": [1]},
+                    }
+                ],
+            )
+        if request.url.path == "/studies/1.2.3.study/metadata":
+            return httpx.Response(200, json=[{"mock": "study-metadata"}])
+        if request.url.path == "/studies/1.2.3.study/series/1.2.3.series/metadata":
+            return httpx.Response(200, json=[{"mock": "series-metadata"}])
+        if request.url.path == "/studies/1.2.3.study/series/1.2.3.series/instances/1.2.3.instance":
+            return httpx.Response(
+                200,
+                headers={"content-type": "application/dicom"},
+                content=b"DICOM-BYTES",
+            )
+        return httpx.Response(404, json={"error": "not found"})
+
+    connector = DICOMWebConnector(
+        mode=ConnectorMode.sandbox,
+        base_url="https://dicom.example.org",
+        transport=httpx.MockTransport(handler),
+    )
+
+    studies = await connector.search_studies(patient_id="patient-123", modality="CT")
+    series = await connector.search_series(study_instance_uid="1.2.3.study")
+    instances = await connector.search_instances(
+        study_instance_uid="1.2.3.study",
+        series_instance_uid="1.2.3.series",
+    )
+    study_metadata = await connector.get_study_metadata("1.2.3.study")
+    series_metadata = await connector.get_series_metadata(
+        study_instance_uid="1.2.3.study",
+        series_instance_uid="1.2.3.series",
+    )
+    retrieved = await connector.retrieve_instance(
+        study_instance_uid="1.2.3.study",
+        series_instance_uid="1.2.3.series",
+        sop_instance_uid="1.2.3.instance",
+    )
+
+    assert studies[0].study_instance_uid == "1.2.3.study"
+    assert series[0].series_instance_uid == "1.2.3.series"
+    assert instances[0].sop_instance_uid == "1.2.3.instance"
+    assert study_metadata.series[0]["mock"] == "study-metadata"
+    assert series_metadata["metadata"][0]["mock"] == "series-metadata"
+    assert retrieved.data == b"DICOM-BYTES"

@@ -7,7 +7,10 @@ import httpx
 from clinicalclaw.connectors.base import (
     ConnectorError,
     ConnectorMode,
+    InstanceSummary,
     ImagingStudySummary,
+    RetrievedObject,
+    SeriesSummary,
     StudyMetadata,
 )
 
@@ -22,11 +25,13 @@ class DICOMWebConnector:
         base_url: str = "",
         access_token: str = "",
         timeout_s: float = 15.0,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.mode = mode
         self.base_url = base_url.rstrip("/")
         self.access_token = access_token
         self.timeout_s = timeout_s
+        self.transport = transport
 
     async def search_studies(
         self,
@@ -74,6 +79,75 @@ class DICOMWebConnector:
             )
         return studies
 
+    async def search_series(
+        self,
+        *,
+        study_instance_uid: str,
+        modality: str | None = None,
+    ) -> list[SeriesSummary]:
+        if self.mode == ConnectorMode.mock:
+            return [
+                SeriesSummary(
+                    study_instance_uid=study_instance_uid,
+                    series_instance_uid="1.2.3.4.1",
+                    modality=modality or "CT",
+                    description="Mock axial series",
+                    instance_count=120,
+                    metadata={"source": "mock"},
+                )
+            ]
+
+        params: dict[str, str] = {}
+        if modality:
+            params["Modality"] = modality
+        payload = await self._get_json(f"studies/{study_instance_uid}/series", params=params or None)
+        series: list[SeriesSummary] = []
+        for item in payload:
+            series.append(
+                SeriesSummary(
+                    study_instance_uid=study_instance_uid,
+                    series_instance_uid=_dicom_value(item, "0020000E"),
+                    modality=_dicom_value(item, "00080060"),
+                    description=_dicom_value(item, "0008103E"),
+                    instance_count=int(_dicom_value(item, "00201209") or 0),
+                    metadata={"source": self.mode.value},
+                )
+            )
+        return series
+
+    async def search_instances(
+        self,
+        *,
+        study_instance_uid: str,
+        series_instance_uid: str,
+    ) -> list[InstanceSummary]:
+        if self.mode == ConnectorMode.mock:
+            return [
+                InstanceSummary(
+                    study_instance_uid=study_instance_uid,
+                    series_instance_uid=series_instance_uid,
+                    sop_instance_uid="1.2.3.4.1.1",
+                    instance_number="1",
+                    metadata={"source": "mock"},
+                )
+            ]
+
+        payload = await self._get_json(
+            f"studies/{study_instance_uid}/series/{series_instance_uid}/instances"
+        )
+        instances: list[InstanceSummary] = []
+        for item in payload:
+            instances.append(
+                InstanceSummary(
+                    study_instance_uid=study_instance_uid,
+                    series_instance_uid=series_instance_uid,
+                    sop_instance_uid=_dicom_value(item, "00080018"),
+                    instance_number=_dicom_value(item, "00200013"),
+                    metadata={"source": self.mode.value},
+                )
+            )
+        return instances
+
     async def get_study_metadata(self, study_instance_uid: str) -> StudyMetadata:
         if self.mode == ConnectorMode.mock:
             return StudyMetadata(
@@ -117,6 +191,54 @@ class DICOMWebConnector:
             "source": self.mode.value,
         }
 
+    async def retrieve_instance(
+        self,
+        *,
+        study_instance_uid: str,
+        series_instance_uid: str,
+        sop_instance_uid: str,
+    ) -> RetrievedObject:
+        if self.mode == ConnectorMode.mock:
+            return RetrievedObject(
+                content_type="application/dicom",
+                data=b"MOCK-DICOM-BYTES",
+                metadata={
+                    "study_instance_uid": study_instance_uid,
+                    "series_instance_uid": series_instance_uid,
+                    "sop_instance_uid": sop_instance_uid,
+                    "source": "mock",
+                },
+            )
+
+        if not self.base_url:
+            raise ConnectorError("DICOMweb base URL is not configured")
+
+        headers = {"Accept": "application/dicom"}
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
+
+        path = (
+            f"{self.base_url}/studies/{study_instance_uid}"
+            f"/series/{series_instance_uid}/instances/{sop_instance_uid}"
+        )
+        async with httpx.AsyncClient(
+            timeout=self.timeout_s,
+            headers=headers,
+            transport=self.transport,
+        ) as client:
+            response = await client.get(path)
+            response.raise_for_status()
+            return RetrievedObject(
+                content_type=response.headers.get("content-type", "application/dicom"),
+                data=response.content,
+                metadata={
+                    "study_instance_uid": study_instance_uid,
+                    "series_instance_uid": series_instance_uid,
+                    "sop_instance_uid": sop_instance_uid,
+                    "source": self.mode.value,
+                },
+            )
+
     async def _get_json(self, path: str, params: dict[str, str] | None = None) -> Any:
         if not self.base_url:
             raise ConnectorError("DICOMweb base URL is not configured")
@@ -125,7 +247,11 @@ class DICOMWebConnector:
         if self.access_token:
             headers["Authorization"] = f"Bearer {self.access_token}"
 
-        async with httpx.AsyncClient(timeout=self.timeout_s, headers=headers) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout_s,
+            headers=headers,
+            transport=self.transport,
+        ) as client:
             response = await client.get(f"{self.base_url}/{path.lstrip('/')}", params=params)
             response.raise_for_status()
             return response.json()

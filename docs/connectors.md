@@ -30,12 +30,15 @@ ClinicalClaw now defines two read-only connector interfaces:
 - `SmartFHIRConnector`
   - SMART endpoint discovery
   - authorize URL construction
+  - sandbox launch session + callback parsing
+  - capability validation
   - authorization-code token exchange skeleton
   - mock chart bundle generation
   - HTTP skeleton for FHIR `Patient`, `Encounter`, `DiagnosticReport`, and `ImagingStudy`
 - `DICOMWebConnector`
   - mock study search and metadata
-  - HTTP skeleton for QIDO-style study queries and metadata reads
+  - QIDO-RS study, series, and instance queries
+  - WADO-RS metadata and instance retrieval
 
 ## Current Scope
 

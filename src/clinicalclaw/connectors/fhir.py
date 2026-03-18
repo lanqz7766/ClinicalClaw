@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import secrets
 from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlparse
 from typing import Any
 
 import httpx
@@ -13,8 +17,10 @@ from clinicalclaw.connectors.base import (
     PatientChartBundle,
     PatientSummary,
     ResourceReference,
+    SmartCallbackParams,
     SmartEndpoints,
     SmartLaunchRequest,
+    SmartLaunchSession,
     SmartTokenSet,
 )
 
@@ -79,6 +85,97 @@ class SmartFHIRConnector:
             capabilities=payload.get("capabilities", []),
             metadata={"mode": self.mode.value, "source": "smart-configuration"},
         )
+
+    async def validate_capabilities(self, required: list[str], iss: str | None = None) -> list[str]:
+        endpoints = await self.discover_endpoints(iss)
+        if self.mode != ConnectorMode.mock and endpoints.metadata.get("source") == "settings":
+            return []
+        missing = [capability for capability in required if capability not in endpoints.capabilities]
+        return missing
+
+    async def begin_sandbox_launch(
+        self,
+        *,
+        iss: str,
+        launch: str | None = None,
+        patient_id: str | None = None,
+        encounter_id: str | None = None,
+        state: str | None = None,
+    ) -> SmartLaunchSession:
+        if not self.client_id:
+            raise ConnectorError("FHIR client_id is not configured")
+        if not self.redirect_uri:
+            raise ConnectorError("FHIR redirect_uri is not configured")
+
+        code_verifier, code_challenge = generate_pkce_pair()
+        launch_request = SmartLaunchRequest(
+            iss=iss,
+            client_id=self.client_id,
+            redirect_uri=self.redirect_uri,
+            scope=self.scope,
+            launch=launch,
+            patient_id=patient_id,
+            encounter_id=encounter_id,
+            state=state or secrets.token_urlsafe(24),
+            code_challenge=code_challenge,
+            metadata={"mode": self.mode.value},
+        )
+        endpoints = await self.discover_endpoints(iss)
+        authorize_url = await self.build_authorize_url(launch_request)
+        return SmartLaunchSession(
+            request=launch_request,
+            endpoints=endpoints,
+            state=launch_request.state,
+            code_verifier=code_verifier,
+            authorize_url=authorize_url,
+            metadata={"mode": self.mode.value},
+        )
+
+    def parse_callback(self, callback_url: str) -> SmartCallbackParams:
+        parsed = urlparse(callback_url)
+        query = parse_qs(parsed.query)
+        return SmartCallbackParams(
+            code=_first(query, "code"),
+            state=_first(query, "state"),
+            iss=_first(query, "iss"),
+            launch=_first(query, "launch"),
+            error=_first(query, "error"),
+            error_description=_first(query, "error_description"),
+            patient_id=_first(query, "patient"),
+            encounter_id=_first(query, "encounter"),
+            metadata={"raw_query": parsed.query},
+        )
+
+    async def complete_sandbox_launch(
+        self,
+        *,
+        callback_url: str,
+        session: SmartLaunchSession,
+    ) -> tuple[SmartTokenSet, LaunchContext]:
+        callback = self.parse_callback(callback_url)
+        if callback.error:
+            raise ConnectorError(
+                f"SMART callback returned error: {callback.error} ({callback.error_description or 'no description'})"
+            )
+        if callback.state != session.state:
+            raise ConnectorError("SMART callback state mismatch")
+        if not callback.code:
+            raise ConnectorError("SMART callback missing authorization code")
+
+        token_set = await self.exchange_authorization_code(
+            code=callback.code,
+            redirect_uri=session.request.redirect_uri,
+            client_id=session.request.client_id,
+            code_verifier=session.code_verifier,
+            iss=callback.iss or session.request.iss,
+        )
+        launch_context = await self.get_launch_context(
+            iss=callback.iss or session.request.iss,
+            launch=callback.launch or session.request.launch,
+            patient_id=token_set.patient_id or callback.patient_id or session.request.patient_id,
+            encounter_id=token_set.encounter_id or callback.encounter_id or session.request.encounter_id,
+        )
+        return token_set, launch_context
 
     async def build_authorize_url(self, request: SmartLaunchRequest) -> str:
         endpoints = await self.discover_endpoints(request.iss)
@@ -309,3 +406,17 @@ class SmartFHIRConnector:
             response = await client.post(url, data=payload)
             response.raise_for_status()
             return response.json()
+
+
+def generate_pkce_pair() -> tuple[str, str]:
+    verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return verifier, challenge
+
+
+def _first(query: dict[str, list[str]], key: str) -> str | None:
+    values = query.get(key)
+    if not values:
+        return None
+    return values[0]
