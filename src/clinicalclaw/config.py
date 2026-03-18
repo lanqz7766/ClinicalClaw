@@ -51,6 +51,15 @@ class ClinicalClawSettings(BaseSettings):
     imaging_connector_mode: str = Field(default="mock", alias="CLINICALCLAW_IMAGING_CONNECTOR_MODE")
     fhir_base_url: str = Field(default="", alias="CLINICALCLAW_FHIR_BASE_URL")
     fhir_access_token: str = Field(default="", alias="CLINICALCLAW_FHIR_ACCESS_TOKEN")
+    fhir_authorize_url: str = Field(default="", alias="CLINICALCLAW_FHIR_AUTHORIZE_URL")
+    fhir_token_url: str = Field(default="", alias="CLINICALCLAW_FHIR_TOKEN_URL")
+    fhir_client_id: str = Field(default="", alias="CLINICALCLAW_FHIR_CLIENT_ID")
+    fhir_client_secret: str = Field(default="", alias="CLINICALCLAW_FHIR_CLIENT_SECRET")
+    fhir_redirect_uri: str = Field(default="", alias="CLINICALCLAW_FHIR_REDIRECT_URI")
+    fhir_scope: str = Field(
+        default="launch/patient patient/*.read encounter/*.read openid fhirUser",
+        alias="CLINICALCLAW_FHIR_SCOPE",
+    )
     dicomweb_base_url: str = Field(default="", alias="CLINICALCLAW_DICOMWEB_BASE_URL")
     dicomweb_access_token: str = Field(default="", alias="CLINICALCLAW_DICOMWEB_ACCESS_TOKEN")
 

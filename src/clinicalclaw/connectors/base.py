@@ -23,6 +23,47 @@ class ResourceReference:
 
 
 @dataclass
+class SmartEndpoints:
+    iss: str
+    authorize_url: str
+    token_url: str
+    introspection_url: str | None = None
+    revocation_url: str | None = None
+    capabilities: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class SmartLaunchRequest:
+    iss: str
+    client_id: str
+    redirect_uri: str
+    scope: str
+    launch: str | None = None
+    aud: str | None = None
+    state: str = ""
+    code_challenge: str | None = None
+    code_challenge_method: str = "S256"
+    patient_id: str | None = None
+    encounter_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class SmartTokenSet:
+    access_token: str
+    token_type: str = "Bearer"
+    expires_in: int | None = None
+    scope: str = ""
+    refresh_token: str | None = None
+    patient_id: str | None = None
+    encounter_id: str | None = None
+    id_token: str | None = None
+    issued_token_type: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class LaunchContext:
     iss: str
     launch: str | None = None
@@ -85,6 +126,23 @@ class StudyMetadata:
 class EHRConnector(Protocol):
     connector_name: str
     mode: ConnectorMode
+
+    async def discover_endpoints(self, iss: str | None = None) -> SmartEndpoints:
+        ...
+
+    async def build_authorize_url(self, request: SmartLaunchRequest) -> str:
+        ...
+
+    async def exchange_authorization_code(
+        self,
+        *,
+        code: str,
+        redirect_uri: str | None = None,
+        client_id: str | None = None,
+        code_verifier: str | None = None,
+        iss: str | None = None,
+    ) -> SmartTokenSet:
+        ...
 
     async def get_launch_context(
         self,

@@ -28,6 +28,9 @@ ClinicalClaw now defines two read-only connector interfaces:
 ## Current Implementations
 
 - `SmartFHIRConnector`
+  - SMART endpoint discovery
+  - authorize URL construction
+  - authorization-code token exchange skeleton
   - mock chart bundle generation
   - HTTP skeleton for FHIR `Patient`, `Encounter`, `DiagnosticReport`, and `ImagingStudy`
 - `DICOMWebConnector`
@@ -38,7 +41,7 @@ ClinicalClaw now defines two read-only connector interfaces:
 
 - read-only only
 - no write-back
-- no token exchange workflow yet
+- SMART token exchange skeleton is present, but no production auth lifecycle yet
 - no retry policy or connector-specific observability yet
 
 ## Why This Is Enough For Now

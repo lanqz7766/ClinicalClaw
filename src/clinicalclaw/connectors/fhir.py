@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from urllib.parse import urlencode
 from typing import Any
 
 import httpx
@@ -12,6 +13,9 @@ from clinicalclaw.connectors.base import (
     PatientChartBundle,
     PatientSummary,
     ResourceReference,
+    SmartEndpoints,
+    SmartLaunchRequest,
+    SmartTokenSet,
 )
 
 
@@ -24,12 +28,128 @@ class SmartFHIRConnector:
         mode: ConnectorMode,
         base_url: str = "",
         access_token: str = "",
+        authorize_url: str = "",
+        token_url: str = "",
+        client_id: str = "",
+        client_secret: str = "",
+        redirect_uri: str = "",
+        scope: str = "launch/patient patient/*.read encounter/*.read openid fhirUser",
         timeout_s: float = 15.0,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.mode = mode
         self.base_url = base_url.rstrip("/")
         self.access_token = access_token
+        self.authorize_url = authorize_url
+        self.token_url = token_url
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.redirect_uri = redirect_uri
+        self.scope = scope
         self.timeout_s = timeout_s
+        self.transport = transport
+
+    async def discover_endpoints(self, iss: str | None = None) -> SmartEndpoints:
+        resolved_iss = (iss or self.base_url or "https://mock-fhir.example.org/fhir/R4").rstrip("/")
+        if self.mode == ConnectorMode.mock:
+            return SmartEndpoints(
+                iss=resolved_iss,
+                authorize_url=self.authorize_url or "https://mock-fhir.example.org/oauth2/authorize",
+                token_url=self.token_url or "https://mock-fhir.example.org/oauth2/token",
+                capabilities=["launch-ehr", "launch-standalone", "client-public"],
+                metadata={"mode": self.mode.value},
+            )
+
+        if self.authorize_url and self.token_url:
+            return SmartEndpoints(
+                iss=resolved_iss,
+                authorize_url=self.authorize_url,
+                token_url=self.token_url,
+                capabilities=["configured-endpoints"],
+                metadata={"mode": self.mode.value, "source": "settings"},
+            )
+
+        payload = await self._get_json(".well-known/smart-configuration", iss_override=resolved_iss)
+        return SmartEndpoints(
+            iss=resolved_iss,
+            authorize_url=payload.get("authorization_endpoint", ""),
+            token_url=payload.get("token_endpoint", ""),
+            introspection_url=payload.get("introspection_endpoint"),
+            revocation_url=payload.get("revocation_endpoint"),
+            capabilities=payload.get("capabilities", []),
+            metadata={"mode": self.mode.value, "source": "smart-configuration"},
+        )
+
+    async def build_authorize_url(self, request: SmartLaunchRequest) -> str:
+        endpoints = await self.discover_endpoints(request.iss)
+        query: dict[str, str] = {
+            "response_type": "code",
+            "client_id": request.client_id,
+            "redirect_uri": request.redirect_uri,
+            "scope": request.scope,
+            "aud": request.aud or request.iss,
+        }
+        if request.launch:
+            query["launch"] = request.launch
+        if request.state:
+            query["state"] = request.state
+        if request.code_challenge:
+            query["code_challenge"] = request.code_challenge
+            query["code_challenge_method"] = request.code_challenge_method
+        return f"{endpoints.authorize_url}?{urlencode(query)}"
+
+    async def exchange_authorization_code(
+        self,
+        *,
+        code: str,
+        redirect_uri: str | None = None,
+        client_id: str | None = None,
+        code_verifier: str | None = None,
+        iss: str | None = None,
+    ) -> SmartTokenSet:
+        if self.mode == ConnectorMode.mock:
+            token_set = SmartTokenSet(
+                access_token="mock-access-token",
+                token_type="Bearer",
+                expires_in=3600,
+                scope=self.scope,
+                refresh_token="mock-refresh-token",
+                patient_id="mock-patient-001",
+                encounter_id="mock-encounter-001",
+                metadata={"mode": self.mode.value, "code": code},
+            )
+            self.access_token = token_set.access_token
+            return token_set
+
+        endpoints = await self.discover_endpoints(iss)
+        payload: dict[str, str] = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri or self.redirect_uri,
+            "client_id": client_id or self.client_id,
+        }
+        if code_verifier:
+            payload["code_verifier"] = code_verifier
+        if self.client_secret:
+            payload["client_secret"] = self.client_secret
+
+        token_payload = await self._post_form(endpoints.token_url, payload)
+        token_set = SmartTokenSet(
+            access_token=token_payload.get("access_token", ""),
+            token_type=token_payload.get("token_type", "Bearer"),
+            expires_in=token_payload.get("expires_in"),
+            scope=token_payload.get("scope", self.scope),
+            refresh_token=token_payload.get("refresh_token"),
+            patient_id=token_payload.get("patient"),
+            encounter_id=token_payload.get("encounter"),
+            id_token=token_payload.get("id_token"),
+            issued_token_type=token_payload.get("issued_token_type"),
+            metadata={"mode": self.mode.value},
+        )
+        if not token_set.access_token:
+            raise ConnectorError("Token exchange succeeded but no access_token was returned")
+        self.access_token = token_set.access_token
+        return token_set
 
     async def get_launch_context(
         self,
@@ -45,7 +165,7 @@ class SmartFHIRConnector:
                 launch=launch or "mock-launch-token",
                 patient_id=patient_id or "mock-patient-001",
                 encounter_id=encounter_id or "mock-encounter-001",
-                scope="launch/patient patient/*.read",
+                scope=self.scope,
                 metadata={"mode": self.mode.value},
             )
 
@@ -54,7 +174,7 @@ class SmartFHIRConnector:
             launch=launch,
             patient_id=patient_id,
             encounter_id=encounter_id,
-            scope="launch/patient patient/*.read",
+            scope=self.scope,
             metadata={"mode": self.mode.value},
         )
 
@@ -161,15 +281,31 @@ class SmartFHIRConnector:
             )
         return references
 
-    async def _get_json(self, path: str) -> dict[str, Any]:
-        if not self.base_url:
+    async def _get_json(self, path: str, iss_override: str | None = None) -> dict[str, Any]:
+        request_base = (iss_override or self.base_url).rstrip("/")
+        if not request_base:
             raise ConnectorError("FHIR base URL is not configured")
 
         headers = {"Accept": "application/fhir+json"}
         if self.access_token:
             headers["Authorization"] = f"Bearer {self.access_token}"
 
-        async with httpx.AsyncClient(timeout=self.timeout_s, headers=headers) as client:
-            response = await client.get(f"{self.base_url}/{path.lstrip('/')}")
+        async with httpx.AsyncClient(
+            timeout=self.timeout_s,
+            headers=headers,
+            transport=self.transport,
+        ) as client:
+            response = await client.get(f"{request_base}/{path.lstrip('/')}")
+            response.raise_for_status()
+            return response.json()
+
+    async def _post_form(self, url: str, payload: dict[str, str]) -> dict[str, Any]:
+        headers = {"Accept": "application/json"}
+        async with httpx.AsyncClient(
+            timeout=self.timeout_s,
+            headers=headers,
+            transport=self.transport,
+        ) as client:
+            response = await client.post(url, data=payload)
             response.raise_for_status()
             return response.json()
