@@ -6,6 +6,8 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from clinicalclaw.smart_launcher import build_smart_launcher_sim_issuer
+
 _loaded = False
 _env_file: Path | None = None
 
@@ -62,10 +64,72 @@ class ClinicalClawSettings(BaseSettings):
         default="launch/patient patient/*.read encounter/*.read openid fhirUser",
         alias="CLINICALCLAW_FHIR_SCOPE",
     )
+    smart_launcher_base_url: str = Field(
+        default="",
+        alias="CLINICALCLAW_SMART_LAUNCHER_BASE_URL",
+    )
+    smart_launcher_fhir_version: str = Field(
+        default="r4",
+        alias="CLINICALCLAW_SMART_LAUNCHER_FHIR_VERSION",
+    )
+    smart_launcher_launch_type: str = Field(
+        default="patient-standalone",
+        alias="CLINICALCLAW_SMART_LAUNCHER_LAUNCH_TYPE",
+    )
+    smart_launcher_patient_id: str = Field(
+        default="",
+        alias="CLINICALCLAW_SMART_LAUNCHER_PATIENT_ID",
+    )
+    smart_launcher_provider_id: str = Field(
+        default="",
+        alias="CLINICALCLAW_SMART_LAUNCHER_PROVIDER_ID",
+    )
+    smart_launcher_encounter_id: str = Field(
+        default="AUTO",
+        alias="CLINICALCLAW_SMART_LAUNCHER_ENCOUNTER_ID",
+    )
+    smart_launcher_skip_login: bool = Field(
+        default=True,
+        alias="CLINICALCLAW_SMART_LAUNCHER_SKIP_LOGIN",
+    )
+    smart_launcher_skip_auth: bool = Field(
+        default=True,
+        alias="CLINICALCLAW_SMART_LAUNCHER_SKIP_AUTH",
+    )
+    smart_launcher_client_type: str = Field(
+        default="public",
+        alias="CLINICALCLAW_SMART_LAUNCHER_CLIENT_TYPE",
+    )
+    smart_launcher_pkce_mode: str = Field(
+        default="always",
+        alias="CLINICALCLAW_SMART_LAUNCHER_PKCE_MODE",
+    )
+    smart_launcher_auto_callback: bool = Field(
+        default=True,
+        alias="CLINICALCLAW_SMART_LAUNCHER_AUTO_CALLBACK",
+    )
     dicomweb_base_url: str = Field(default="", alias="CLINICALCLAW_DICOMWEB_BASE_URL")
     dicomweb_access_token: str = Field(default="", alias="CLINICALCLAW_DICOMWEB_ACCESS_TOKEN")
 
 
 def load_settings() -> ClinicalClawSettings:
     _discover_env_file()
-    return ClinicalClawSettings(_env_file=_env_file) if _env_file else ClinicalClawSettings()
+    settings = ClinicalClawSettings(_env_file=_env_file) if _env_file else ClinicalClawSettings()
+    if not settings.fhir_base_url and settings.smart_launcher_base_url:
+        settings.fhir_base_url = build_smart_launcher_sim_issuer(
+            launcher_base_url=settings.smart_launcher_base_url,
+            fhir_version=settings.smart_launcher_fhir_version,
+            launch_type=settings.smart_launcher_launch_type,
+            patient_id=settings.smart_launcher_patient_id,
+            provider_id=settings.smart_launcher_provider_id,
+            encounter_id=settings.smart_launcher_encounter_id,
+            skip_login=settings.smart_launcher_skip_login,
+            skip_auth=settings.smart_launcher_skip_auth,
+            scope=settings.fhir_scope,
+            redirect_uri=settings.fhir_redirect_uri,
+            client_id=settings.fhir_client_id,
+            client_secret=settings.fhir_client_secret,
+            client_type=settings.smart_launcher_client_type,
+            pkce=settings.smart_launcher_pkce_mode,
+        )
+    return settings

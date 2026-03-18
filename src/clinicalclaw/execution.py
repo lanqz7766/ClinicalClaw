@@ -44,6 +44,9 @@ class ScenarioExecutionResult:
 
 
 class ClinicalClawService:
+    SMART_LIVE_LAUNCH_MEMORY_ID = "smart_live_launch_validation"
+    SMART_LIVE_READ_MEMORY_ID = "smart_live_read_validation"
+
     def __init__(
         self,
         settings: ClinicalClawSettings | None = None,
@@ -236,6 +239,29 @@ class ClinicalClawService:
             metadata={"scenario_id": scenario.id, "output_kind": output.kind},
         )
 
+    def _record_memory(
+        self,
+        *,
+        scenario_id: str,
+        task_run_id: str,
+        outcome: MemoryOutcome,
+        summary: str,
+        guidance: str,
+        content: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        self.store.add_run_memory(
+            RunMemoryRecord(
+                scenario_id=scenario_id,
+                task_run_id=task_run_id,
+                outcome=outcome,
+                summary=summary,
+                guidance=guidance,
+                content=content,
+                metadata=metadata or {},
+            )
+        )
+
     def _record_run_memory(
         self,
         *,
@@ -246,17 +272,119 @@ class ClinicalClawService:
         guidance: str,
         content: str,
     ) -> None:
-        self.store.add_run_memory(
-            RunMemoryRecord(
-                scenario_id=scenario.id,
-                task_run_id=task_run_id,
-                outcome=outcome,
-                summary=summary,
-                guidance=guidance,
-                content=content,
-                metadata={"scenario_name": scenario.name},
-            )
+        self._record_memory(
+            scenario_id=scenario.id,
+            task_run_id=task_run_id,
+            outcome=outcome,
+            summary=summary,
+            guidance=guidance,
+            content=content,
+            metadata={"scenario_name": scenario.name},
         )
+
+    def _record_smart_launch_memory(
+        self,
+        *,
+        outcome: MemoryOutcome,
+        summary: str,
+        guidance: str,
+        content: str,
+        session_id: str,
+        iss: str,
+        patient_id: str | None = None,
+        encounter_id: str | None = None,
+    ) -> None:
+        self._record_memory(
+            scenario_id=self.SMART_LIVE_LAUNCH_MEMORY_ID,
+            task_run_id=session_id,
+            outcome=outcome,
+            summary=summary,
+            guidance=guidance,
+            content=content,
+            metadata={
+                "integration": "smart",
+                "phase": "launch",
+                "iss": iss,
+                "patient_id": patient_id or "",
+                "encounter_id": encounter_id or "",
+            },
+        )
+
+    def _record_smart_read_memory(
+        self,
+        *,
+        outcome: MemoryOutcome,
+        summary: str,
+        guidance: str,
+        content: str,
+        patient_id: str,
+        encounter_id: str | None = None,
+        iss: str | None = None,
+    ) -> None:
+        self._record_memory(
+            scenario_id=self.SMART_LIVE_READ_MEMORY_ID,
+            task_run_id=patient_id,
+            outcome=outcome,
+            summary=summary,
+            guidance=guidance,
+            content=content,
+            metadata={
+                "integration": "smart",
+                "phase": "read",
+                "iss": iss or "",
+                "patient_id": patient_id,
+                "encounter_id": encounter_id or "",
+            },
+        )
+
+    async def validate_smart_read(
+        self,
+        *,
+        patient_id: str,
+        encounter_id: str | None = None,
+        iss: str | None = None,
+    ) -> PatientChartBundle:
+        try:
+            chart = await self.connectors.ehr.fetch_patient_chart(
+                patient_id=patient_id,
+                encounter_id=encounter_id,
+            )
+            self._record_smart_read_memory(
+                outcome=MemoryOutcome.success,
+                summary=(
+                    "SMART live read succeeded for "
+                    f"patient {patient_id} with {len(chart.diagnostic_reports)} diagnostic reports "
+                    f"and {len(chart.imaging_studies)} imaging studies."
+                ),
+                guidance=(
+                    "Reuse validated SMART issuer and scopes. If a sandbox patient later returns 410 or no longer "
+                    "has expected resources, switch to a currently active patient ID before retrying."
+                ),
+                content=(
+                    f"patient={chart.patient.display_name}; "
+                    f"encounter={chart.encounter.encounter_id if chart.encounter else 'none'}; "
+                    f"diagnostic_reports={len(chart.diagnostic_reports)}; "
+                    f"imaging_studies={len(chart.imaging_studies)}"
+                ),
+                patient_id=patient_id,
+                encounter_id=encounter_id or (chart.encounter.encounter_id if chart.encounter else None),
+                iss=iss or self.settings.fhir_base_url,
+            )
+            return chart
+        except Exception as exc:
+            self._record_smart_read_memory(
+                outcome=MemoryOutcome.failure,
+                summary=f"SMART live read failed: {type(exc).__name__}",
+                guidance=(
+                    "Check that the sandbox patient is still active, that SMART scopes cover the requested read path, "
+                    "and that the selected issuer still serves the target resources."
+                ),
+                content=str(exc)[:1500],
+                patient_id=patient_id,
+                encounter_id=encounter_id,
+                iss=iss or self.settings.fhir_base_url,
+            )
+            raise
 
     def list_review_queue(self, limit: int = 20) -> list[TaskRunRecord]:
         return self.store.list_tasks_by_status(TaskRunStatus.in_review, limit=limit)
@@ -392,25 +520,57 @@ class ClinicalClawService:
             metadata=persisted.metadata,
         )
 
-        token_set, launch_context = await self.connectors.ehr.complete_sandbox_launch(
-            callback_url=callback_url,
-            session=session,
-        )
-        token_record = self.store.save_smart_token_state(
-            SmartTokenStateRecord(
+        try:
+            token_set, launch_context = await self.connectors.ehr.complete_sandbox_launch(
+                callback_url=callback_url,
+                session=session,
+            )
+            token_record = self.store.save_smart_token_state(
+                SmartTokenStateRecord(
+                    session_id=persisted.id,
+                    iss=launch_context.iss,
+                    token_type=token_set.token_type,
+                    access_token=token_set.access_token,
+                    refresh_token=token_set.refresh_token,
+                    scope=token_set.scope,
+                    expires_in=token_set.expires_in,
+                    patient_id=token_set.patient_id,
+                    encounter_id=token_set.encounter_id,
+                    metadata={"mode": token_set.metadata.get("mode", "")},
+                )
+            )
+            self._record_smart_launch_memory(
+                outcome=MemoryOutcome.success,
+                summary=(
+                    f"SMART launch completed for issuer {launch_context.iss} "
+                    f"and patient {token_record.patient_id or 'unknown'}."
+                ),
+                guidance=(
+                    "Reuse this issuer/client/redirect combination for future sandbox validation. "
+                    "If callback state mismatches or token exchange fails, regenerate a fresh launch session."
+                ),
+                content=callback_url[:1500],
                 session_id=persisted.id,
                 iss=launch_context.iss,
-                token_type=token_set.token_type,
-                access_token=token_set.access_token,
-                refresh_token=token_set.refresh_token,
-                scope=token_set.scope,
-                expires_in=token_set.expires_in,
-                patient_id=token_set.patient_id,
-                encounter_id=token_set.encounter_id,
-                metadata={"mode": token_set.metadata.get("mode", "")},
+                patient_id=token_record.patient_id,
+                encounter_id=token_record.encounter_id,
             )
-        )
-        return token_record, launch_context
+            return token_record, launch_context
+        except Exception as exc:
+            self._record_smart_launch_memory(
+                outcome=MemoryOutcome.failure,
+                summary=f"SMART launch failed: {type(exc).__name__}",
+                guidance=(
+                    "Verify issuer, callback URL, PKCE state, and client redirect configuration before retrying "
+                    "the SMART launch flow."
+                ),
+                content=str(exc)[:1500],
+                session_id=persisted.id,
+                iss=persisted.iss,
+                patient_id=persisted.patient_id,
+                encounter_id=persisted.encounter_id,
+            )
+            raise
 
     async def invoke_scenario(
         self,

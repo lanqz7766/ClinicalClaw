@@ -334,3 +334,39 @@ async def test_sandbox_dicomweb_qido_and_wado_flow():
     assert study_metadata.series[0]["mock"] == "study-metadata"
     assert series_metadata["metadata"][0]["mock"] == "series-metadata"
     assert retrieved.data == b"DICOM-BYTES"
+
+
+@pytest.mark.asyncio
+async def test_sandbox_dicomweb_retrieve_instance_supports_multipart():
+    boundary = "test-boundary"
+    multipart_body = (
+        f"--{boundary}\r\n"
+        "Content-Type: application/dicom\r\n"
+        "MIME-Version: 1.0\r\n"
+        "\r\n"
+    ).encode() + b"DICOM-MULTIPART-BYTES\r\n" + f"--{boundary}--\r\n".encode()
+
+    def handler(request):
+        if request.url.path == "/studies/1.2.3.study/series/1.2.3.series/instances/1.2.3.instance":
+            assert request.headers["accept"].startswith("multipart/related")
+            return httpx.Response(
+                200,
+                headers={"content-type": f'multipart/related; type="application/dicom"; boundary={boundary}'},
+                content=multipart_body,
+            )
+        return httpx.Response(404, json={"error": "not found"})
+
+    connector = DICOMWebConnector(
+        mode=ConnectorMode.sandbox,
+        base_url="https://dicom.example.org",
+        transport=httpx.MockTransport(handler),
+    )
+
+    retrieved = await connector.retrieve_instance(
+        study_instance_uid="1.2.3.study",
+        series_instance_uid="1.2.3.series",
+        sop_instance_uid="1.2.3.instance",
+    )
+
+    assert retrieved.content_type == "application/dicom"
+    assert retrieved.data == b"DICOM-MULTIPART-BYTES"

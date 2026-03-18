@@ -132,6 +132,10 @@ For local SMART sandbox bring-up, see:
 
 - [examples/09_smart_sandbox_entry.py](/Users/qlan/Documents/Agent/ClinicalClaw/examples/09_smart_sandbox_entry.py)
 
+For local DICOMweb sandbox validation, see:
+
+- [examples/10_dicomweb_sandbox_entry.py](/Users/qlan/Documents/Agent/ClinicalClaw/examples/10_dicomweb_sandbox_entry.py)
+
 ## Upstream Base
 
 This repository includes code copied from [x1jiang/clawagents_py](https://github.com/x1jiang/clawagents_py). The runtime remains in `src/clawagents` so we can reuse its gateway, queueing, tool registry, sandbox, and agent loop while layering hospital-specific platform concerns in `src/clinicalclaw`.

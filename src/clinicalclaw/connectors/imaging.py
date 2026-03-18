@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import httpx
@@ -213,7 +214,7 @@ class DICOMWebConnector:
         if not self.base_url:
             raise ConnectorError("DICOMweb base URL is not configured")
 
-        headers = {"Accept": "application/dicom"}
+        headers = {"Accept": 'multipart/related; type="application/dicom"; transfer-syntax=*'}
         if self.access_token:
             headers["Authorization"] = f"Bearer {self.access_token}"
 
@@ -228,9 +229,13 @@ class DICOMWebConnector:
         ) as client:
             response = await client.get(path)
             response.raise_for_status()
+            content_type = response.headers.get("content-type", "application/dicom")
+            data = response.content
+            if content_type.lower().startswith("multipart/related"):
+                content_type, data = _extract_first_multipart_part(content_type, data)
             return RetrievedObject(
-                content_type=response.headers.get("content-type", "application/dicom"),
-                data=response.content,
+                content_type=content_type,
+                data=data,
                 metadata={
                     "study_instance_uid": study_instance_uid,
                     "series_instance_uid": series_instance_uid,
@@ -265,3 +270,35 @@ def _dicom_value(item: dict[str, Any], tag: str) -> str:
     if isinstance(value, dict):
         return str(value.get("Alphabetic", ""))
     return str(value)
+
+
+def _extract_first_multipart_part(content_type: str, payload: bytes) -> tuple[str, bytes]:
+    match = re.search(r'boundary="?([^";]+)"?', content_type, flags=re.IGNORECASE)
+    if not match:
+        raise ConnectorError("Multipart DICOMweb response did not include a boundary")
+
+    boundary = match.group(1).encode("utf-8")
+    delimiter = b"--" + boundary
+    for part in payload.split(delimiter):
+        if not part or part in {b"--", b"--\r\n"}:
+            continue
+        segment = part.lstrip(b"\r\n")
+        if segment.endswith(b"--\r\n"):
+            segment = segment[:-4]
+        elif segment.endswith(b"--"):
+            segment = segment[:-2]
+        if segment.endswith(b"\r\n"):
+            segment = segment[:-2]
+
+        header_blob, separator, body = segment.partition(b"\r\n\r\n")
+        if not separator:
+            continue
+
+        part_content_type = "application/dicom"
+        for line in header_blob.decode("latin-1", errors="ignore").split("\r\n"):
+            if line.lower().startswith("content-type:"):
+                part_content_type = line.split(":", 1)[1].strip()
+                break
+        return part_content_type, body
+
+    raise ConnectorError("Multipart DICOMweb response did not contain a readable part")
