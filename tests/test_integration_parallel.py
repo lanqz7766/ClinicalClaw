@@ -116,7 +116,7 @@ class TestLargeResultConcatenation:
         registry = ToolRegistry()
         registry.register(MockTool("big_output", output_size=5000))
 
-        calls = [ParsedToolCall("big_output", {}) for _ in range(3)]
+        calls = [ParsedToolCall("big_output", {"path": f"payload-{i}.txt"}) for i in range(3)]
         results = await registry.execute_tools_parallel(calls)
 
         summaries = [
