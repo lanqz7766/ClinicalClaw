@@ -21,6 +21,12 @@ const state = {
     queueSummary: null,
     workspace: null,
   },
+  screening: {
+    caseId: null,
+    cases: [],
+    queueSummary: null,
+    workspace: null,
+  },
   neuro: {
     caseId: null,
     cases: [],
@@ -189,10 +195,7 @@ function setPage(page) {
   document.querySelectorAll("[data-page-panel]").forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.pagePanel === page);
   });
-  const workflowMenu = document.querySelector(".workflow-menu");
-  if (workflowMenu) {
-    workflowMenu.removeAttribute("open");
-  }
+  document.querySelectorAll(".topbar-flyout").forEach((flyout) => flyout.removeAttribute("open"));
   if (page === "home" && state.console) {
     document.getElementById("page-subtitle").textContent = state.console.tagline;
   }
@@ -221,7 +224,8 @@ function renderConsole(consolePayload) {
     .map(
       (item) => `
         <button class="workflow-menu-item module-open" data-open-module="${item.module}" type="button" role="menuitem">
-          ${item.title}
+          <span>${item.title}</span>
+          <small>${item.examples[0] || item.summary}</small>
         </button>
       `,
     )
@@ -282,6 +286,9 @@ function summarizeToolCall(name = "", route = {}) {
   if (toolName.includes("diagnosis")) {
     return "Reviewing the relevant missed-diagnosis context.";
   }
+  if (toolName.includes("screening")) {
+    return "Reviewing the relevant screening-gap context.";
+  }
   if (toolName.includes("knowledge") || toolName.includes("search")) {
     return "Checking prior safety patterns and reference signals.";
   }
@@ -302,6 +309,9 @@ function summarizeToolCall(name = "", route = {}) {
   }
   if (workflowId === "missed_diagnosis_detection" || targetModule === "diagnosis") {
     return "Reviewing the relevant missed-diagnosis context.";
+  }
+  if (workflowId === "screening_gap_closure" || targetModule === "screening") {
+    return "Reviewing the relevant screening-gap context.";
   }
   if (workflowId === "neuro_longitudinal" || targetModule === "neuro") {
     return "Reviewing the longitudinal imaging context.";
@@ -584,6 +594,76 @@ function renderDiagnosisWorkspace(workspace) {
     .join("");
   document.getElementById("diagnosis-rationale").textContent = workspace.gap_recommendation || workspace.rationale[0];
   document.getElementById("diagnosis-evidence").innerHTML = workspace.evidence_grid
+    .map(
+      (item) => `
+        <div class="field-chip">
+          <span>${item.label}</span>
+          <strong>${item.value}</strong>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderScreeningCaseList() {
+  const container = document.getElementById("screening-case-list");
+  container.innerHTML = state.screening.cases
+    .map(
+      (item) => `
+        <div class="case-item${item.id === state.screening.caseId ? " active" : ""}">
+          <button type="button" data-screening-case-id="${item.id}">
+            <div class="meta-row">
+              <strong>${item.title}</strong>
+              <span>${item.risk_label}</span>
+            </div>
+            <p>${item.workflow_title}</p>
+            <div class="meta-row">
+              <span>${item.queue}</span>
+              <span>${formatDate(item.due_at)}</span>
+            </div>
+          </button>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderScreeningWorkspace(workspace) {
+  state.screening.workspace = workspace;
+  renderScreeningCaseList();
+  document.getElementById("screening-title").textContent = workspace.title;
+  document.getElementById("screening-subtitle").textContent = workspace.risk_reason;
+  document.getElementById("screening-meta").innerHTML = `
+    <span>${workspace.patient_label}</span>
+    <span>${workspace.service_line}</span>
+    <span>${workspace.queue}</span>
+  `;
+  document.getElementById("screening-risk-badge").textContent = workspace.risk_label;
+  document.getElementById("screening-risk-badge").className = `risk-badge ${workspace.risk_tier}`;
+  document.getElementById("screening-summary-cards").innerHTML = workspace.summary_cards
+    .map(
+      (item) => `
+        <article class="summary-card">
+          <span>${item.label}</span>
+          <strong>${item.label === "Due" ? formatTimestamp(item.value) : item.value}</strong>
+        </article>
+      `,
+    )
+    .join("");
+  document.getElementById("screening-focus").textContent =
+    `${workspace.focus_metric.label}: ${workspace.focus_metric.value} ${workspace.focus_metric.unit} · ${workspace.focus_metric.delta}`;
+  document.getElementById("screening-actions").innerHTML = workspace.recommended_actions
+    .map(
+      (item) => `
+        <article class="report-block">
+          <h4>${item}</h4>
+          <p>${workspace.workflow_title}</p>
+        </article>
+      `,
+    )
+    .join("");
+  document.getElementById("screening-rationale").textContent = workspace.gap_recommendation || workspace.rationale[0];
+  document.getElementById("screening-evidence").innerHTML = workspace.evidence_grid
     .map(
       (item) => `
         <div class="field-chip">
@@ -1051,6 +1131,20 @@ async function loadDiagnosisWorkspace(caseId = null) {
   renderDiagnosisWorkspace(payload.workspace);
 }
 
+async function loadScreeningWorkspace(caseId = null) {
+  if (caseId) {
+    const workspace = await fetchJson(`/api/screening/cases/${caseId}`);
+    state.screening.caseId = caseId;
+    renderScreeningWorkspace(workspace);
+    return;
+  }
+  const payload = await fetchJson("/api/screening/workspace");
+  state.screening.caseId = payload.default_case_id;
+  state.screening.cases = payload.cases;
+  state.screening.queueSummary = payload.queue_summary;
+  renderScreeningWorkspace(payload.workspace);
+}
+
 async function loadSafetyWorkspace(caseId = null) {
   if (caseId) {
     const workspace = await fetchJson(`/api/safety/cases/${caseId}`);
@@ -1245,6 +1339,12 @@ function bindEvents() {
       setPage("diagnosis");
       return;
     }
+    const screeningCaseButton = event.target.closest("[data-screening-case-id]");
+    if (screeningCaseButton) {
+      await loadScreeningWorkspace(screeningCaseButton.dataset.screeningCaseId);
+      setPage("screening");
+      return;
+    }
     const homePrompt = event.target.closest(".home-prompt");
     if (homePrompt) {
       document.getElementById("command-input").value = homePrompt.dataset.prompt;
@@ -1291,7 +1391,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   ];
   renderHomeChat();
   renderRouterCard();
-  await Promise.all([loadConsole(), loadNeuroWorkspace(), loadSafetyWorkspace(), loadQueueWorkspace(), loadDiagnosisWorkspace()]);
+  await Promise.all([
+    loadConsole(),
+    loadNeuroWorkspace(),
+    loadSafetyWorkspace(),
+    loadQueueWorkspace(),
+    loadDiagnosisWorkspace(),
+    loadScreeningWorkspace(),
+  ]);
   await loadFindingsWorkspace();
   setPage("home");
   setSubView("neuro", "command");

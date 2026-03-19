@@ -8,6 +8,11 @@ from clinicalclaw.workflow_families.missed_diagnosis import (
     MissedDiagnosisEvaluation,
     MissedDiagnosisFamily,
 )
+from clinicalclaw.workflow_families.screening_gap import (
+    ScreeningGapCase,
+    ScreeningGapEvaluation,
+    ScreeningGapFamily,
+)
 from clinicalclaw.workflow_families.queue_triage import (
     QueueTriageCase,
     QueueTriageEvaluation,
@@ -21,6 +26,9 @@ __all__ = [
     "MissedDiagnosisCase",
     "MissedDiagnosisEvaluation",
     "MissedDiagnosisFamily",
+    "ScreeningGapCase",
+    "ScreeningGapEvaluation",
+    "ScreeningGapFamily",
     "QueueTriageCase",
     "QueueTriageEvaluation",
     "QueueTriageFamily",

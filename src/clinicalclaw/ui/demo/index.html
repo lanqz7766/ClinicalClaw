@@ -15,13 +15,29 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <button class="brand-lockup brand-button" data-open-module="home" type="button">
-          <p class="eyebrow">ClinicalClaw</p>
-          <h1>Clinical Console</h1>
-        </button>
-        <details class="workflow-menu">
+        <details class="topbar-flyout brand-flyout">
+          <summary class="brand-summary">
+            <span class="brand-mark">C</span>
+            <span class="brand-copy">
+              <strong>ClinicalClaw</strong>
+              <small>Clinical Console</small>
+            </span>
+          </summary>
+          <div class="flyout-panel brand-panel" role="menu" aria-label="ClinicalClaw navigation">
+            <button class="flyout-action" data-open-module="home" type="button" role="menuitem">
+              <span>General Command</span>
+              <small>Return to the chat landing page.</small>
+            </button>
+            <button class="flyout-action" data-open-module="workflows" type="button" role="menuitem">
+              <span>Workflow Library</span>
+              <small>Browse available workflow families and modules.</small>
+            </button>
+          </div>
+        </details>
+
+        <details class="topbar-flyout workflow-menu">
           <summary class="workflow-menu-button">Workflows</summary>
-          <div id="workflow-menu-list" class="workflow-menu-list" role="menu" aria-label="Workflow navigation"></div>
+          <div id="workflow-menu-list" class="flyout-panel workflow-menu-list" role="menu" aria-label="Workflow navigation"></div>
         </details>
       </header>
 
@@ -138,6 +154,7 @@
               </div>
               <div class="module-header-side">
                 <span id="queue-risk-badge" class="risk-badge">Alert</span>
+                <a class="ghost-button" href="/queue-demo" target="_blank" rel="noreferrer">Open full module</a>
               </div>
             </header>
 
@@ -226,6 +243,59 @@
                     </div>
                     <p id="diagnosis-rationale" class="support-copy"></p>
                     <div id="diagnosis-evidence" class="field-grid"></div>
+                  </article>
+                </div>
+              </section>
+            </div>
+          </section>
+        </section>
+
+        <section class="page-panel" data-page-panel="screening">
+          <section class="module-page">
+            <header class="module-page-header">
+              <div>
+                <p class="eyebrow">Screening Gap Closure</p>
+                <h2 id="screening-title">Loading case...</h2>
+                <p id="screening-subtitle" class="support-copy"></p>
+                <div id="screening-meta" class="meta-row chips"></div>
+              </div>
+              <div class="module-header-side">
+                <span id="screening-risk-badge" class="risk-badge">Alert</span>
+              </div>
+            </header>
+
+            <div class="module-layout">
+              <aside class="module-rail">
+                <section class="card compact">
+                  <p class="section-label">Cases</p>
+                  <div id="screening-case-list" class="case-list"></div>
+                </section>
+              </aside>
+
+              <section class="module-content">
+                <div id="screening-summary-cards" class="summary-cards"></div>
+
+                <div class="grid two-col">
+                  <article class="card">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="section-label">Signal</p>
+                        <h3>Screening gap signal</h3>
+                      </div>
+                    </div>
+                    <p id="screening-focus" class="hero-summary report-summary"></p>
+                    <div id="screening-actions" class="report-sections"></div>
+                  </article>
+
+                  <article class="card">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="section-label">Follow-up</p>
+                        <h3>Recommended next step</h3>
+                      </div>
+                    </div>
+                    <p id="screening-rationale" class="support-copy"></p>
+                    <div id="screening-evidence" class="field-grid"></div>
                   </article>
                 </div>
               </section>

@@ -52,6 +52,9 @@ Recommended implementation order:
 Implemented first:
 
 - workflow engine loader and definition models
-- the initial 10 workflow specs
-- the first reusable family:
+- the initial 11 workflow specs
+- executable reusable families:
   - `findings_closure`
+  - `queue_triage`
+  - `missed_diagnosis_detection`
+  - `screening_gap_closure`

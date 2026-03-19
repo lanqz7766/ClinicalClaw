@@ -6,6 +6,7 @@ from clinicalclaw.demo_workspace import demo_workspace_store
 from clinicalclaw.findings_closure import findings_closure_store
 from clinicalclaw.missed_diagnosis import missed_diagnosis_store
 from clinicalclaw.queue_triage import queue_triage_store
+from clinicalclaw.screening_gap import screening_gap_store
 from clinicalclaw.safety_monitor import safety_monitor_store
 
 
@@ -26,12 +27,12 @@ WORKFLOWS = [
         "id": "findings_closure",
         "title": "Findings Closure",
         "module": "findings",
-        "summary": "Actionable findings follow-up across labs, reports, and screening closure workflows.",
+        "summary": "Actionable findings follow-up across labs, radiology reports, and other result-closure workflows.",
         "tools": ["finding_parser", "closure_checker", "action_recommender", "review_router"],
         "tags": ["findings", "follow-up", "lab", "report", "closure"],
         "examples": [
             "Does this critical lab need urgent escalation?",
-            "Check whether this positive result still needs follow-up.",
+            "Check whether this actionable report finding still needs follow-up.",
         ],
     },
     {
@@ -56,6 +57,18 @@ WORKFLOWS = [
         "examples": [
             "Does this report suggest a missed vertebral fracture workup gap?",
             "Review this case for a likely missed diagnosis and summarize the next step.",
+        ],
+    },
+    {
+        "id": "screening_gap_closure",
+        "title": "Screening Gap Closure",
+        "module": "screening",
+        "summary": "Detect overdue or unresolved screening follow-up and prepare a concise review-first closure plan.",
+        "tools": ["screening_reader", "gap_checker", "followup_recommender", "review_router"],
+        "tags": ["screening", "gap", "follow-up", "population-health"],
+        "examples": [
+            "Does this positive FIT still need diagnostic follow-up?",
+            "Review this screening result and tell me whether the gap is still open.",
         ],
     },
     {
@@ -89,14 +102,12 @@ ROUTING_KEYWORDS = {
     "findings": {
         "critical",
         "lab",
-        "positive fit",
         "follow-up",
         "follow up",
         "result",
         "finding",
         "abnormal pap",
         "nodule",
-        "colonoscopy",
         "potassium",
     },
     "queue": {
@@ -126,6 +137,19 @@ ROUTING_KEYWORDS = {
         "atrial fibrillation",
         "hypertension",
     },
+    "screening": {
+        "screening",
+        "positive fit",
+        "fit",
+        "colonoscopy",
+        "cervical",
+        "pap",
+        "hpv",
+        "lung cancer screening",
+        "diabetic eye exam",
+        "overdue screening",
+        "care gap",
+    },
     "neuro": {"mri", "brain", "hippocampus", "atrophy", "neuro", "longitudinal", "report", "volume", "trend"},
     "safety": {
         "incident",
@@ -151,12 +175,14 @@ def console_snapshot() -> dict[str, Any]:
     findings = findings_closure_store.snapshot()
     queue = queue_triage_store.snapshot()
     diagnosis = missed_diagnosis_store.snapshot()
+    screening = screening_gap_store.snapshot()
     return {
         "title": "ClinicalClaw Console",
         "tagline": "General clinical command center with workflow-specific modules.",
         "quick_prompts": [
             "Review this MRI trend and draft a physician summary.",
             "Should this referral move into an urgent queue today?",
+            "Does this positive FIT still need colonoscopy follow-up?",
             "Check whether this radiotherapy case resembles a known failure pattern.",
             "Route my request to the right workflow and show the next actions.",
         ],
@@ -164,7 +190,7 @@ def console_snapshot() -> dict[str, Any]:
         "highlights": [
             {
                 "label": "Available modules",
-                "value": "3 workflow workspaces",
+                "value": f"{len([item for item in WORKFLOWS if item['module'] != 'home'])} workflow workspaces",
             },
             {
                 "label": "Active safety queue",
@@ -181,6 +207,10 @@ def console_snapshot() -> dict[str, Any]:
             {
                 "label": "Diagnosis gap review",
                 "value": f"{len(diagnosis['cases'])} review cases",
+            },
+            {
+                "label": "Screening gap queue",
+                "value": f"{len(screening['cases'])} screening cases",
             },
             {
                 "label": "Neuro report state",
@@ -212,6 +242,12 @@ def console_snapshot() -> dict[str, Any]:
                 "risk": diagnosis["workspace"]["risk_label"],
                 "default_case_id": diagnosis["default_case_id"],
             },
+            "screening": {
+                "title": screening["workspace"]["title"],
+                "summary": screening["workspace"]["risk_reason"],
+                "risk": screening["workspace"]["risk_label"],
+                "default_case_id": screening["default_case_id"],
+            },
             "safety": {
                 "title": safety["workspace"]["title"],
                 "summary": safety["workspace"]["risk_reason"],
@@ -227,6 +263,7 @@ def rank_workflows(message: str) -> list[dict[str, Any]]:
     findings_score = sum(1 for token in ROUTING_KEYWORDS["findings"] if token in lowered)
     queue_score = sum(1 for token in ROUTING_KEYWORDS["queue"] if token in lowered)
     diagnosis_score = sum(1 for token in ROUTING_KEYWORDS["diagnosis"] if token in lowered)
+    screening_score = sum(1 for token in ROUTING_KEYWORDS["screening"] if token in lowered)
     neuro_score = sum(1 for token in ROUTING_KEYWORDS["neuro"] if token in lowered)
     safety_score = sum(1 for token in ROUTING_KEYWORDS["safety"] if token in lowered)
     ranked = [
@@ -244,6 +281,11 @@ def rank_workflows(message: str) -> list[dict[str, Any]]:
             "module": "diagnosis",
             "workflow": next(item for item in WORKFLOWS if item["module"] == "diagnosis"),
             "score": diagnosis_score,
+        },
+        {
+            "module": "screening",
+            "workflow": next(item for item in WORKFLOWS if item["module"] == "screening"),
+            "score": screening_score,
         },
         {
             "module": "neuro",
@@ -271,8 +313,26 @@ def route_general_query(message: str) -> dict[str, Any]:
     findings_score = next(item["score"] for item in ranked if item["module"] == "findings")
     queue_score = next(item["score"] for item in ranked if item["module"] == "queue")
     diagnosis_score = next(item["score"] for item in ranked if item["module"] == "diagnosis")
+    screening_score = next(item["score"] for item in ranked if item["module"] == "screening")
     neuro_score = next(item["score"] for item in ranked if item["module"] == "neuro")
     safety_score = next(item["score"] for item in ranked if item["module"] == "safety")
+
+    if screening_score >= findings_score and screening_score >= queue_score and screening_score >= diagnosis_score and screening_score >= neuro_score and screening_score >= safety_score and screening_score > 0:
+        workflow = best["workflow"]
+        return {
+            "assistant": {
+                "content": (
+                    "I routed this request to Screening Gap Closure. The next step is to verify whether the screening follow-up "
+                    "is still open, summarize the missing step, and prepare a review-first closure recommendation."
+                )
+            },
+            "workflow": workflow,
+            "target_module": "screening",
+            "target_view": "screening",
+            "suggested_steps": workflow["tools"],
+            "alternatives": alternatives,
+            "confidence": min(0.55 + screening_score * 0.12, 0.9),
+        }
 
     if findings_score >= queue_score and findings_score >= diagnosis_score and findings_score >= neuro_score and findings_score >= safety_score and findings_score > 0:
         workflow = best["workflow"]
@@ -291,7 +351,7 @@ def route_general_query(message: str) -> dict[str, Any]:
             "confidence": min(0.55 + findings_score * 0.12, 0.9),
         }
 
-    if queue_score >= diagnosis_score and queue_score >= neuro_score and queue_score >= safety_score and queue_score > 0:
+    if queue_score >= diagnosis_score and queue_score >= screening_score and queue_score >= neuro_score and queue_score >= safety_score and queue_score > 0:
         workflow = best["workflow"]
         return {
             "assistant": {
@@ -308,7 +368,7 @@ def route_general_query(message: str) -> dict[str, Any]:
             "confidence": min(0.55 + queue_score * 0.12, 0.9),
         }
 
-    if diagnosis_score >= neuro_score and diagnosis_score >= safety_score and diagnosis_score > 0:
+    if diagnosis_score >= screening_score and diagnosis_score >= neuro_score and diagnosis_score >= safety_score and diagnosis_score > 0:
         workflow = best["workflow"]
         return {
             "assistant": {
@@ -365,8 +425,8 @@ def route_general_query(message: str) -> dict[str, Any]:
             "content": (
                 "I can route requests into workflow-specific modules. Try a findings question about critical results or "
                 "follow-up closure, a queue question about referrals or post-discharge follow-up, a diagnosis-gap question "
-                "about missed fractures or unrecognized conditions, a neuro question about longitudinal MRI change, or a "
-                "safety question about incident patterns."
+                "about missed fractures or unrecognized conditions, a screening question about open preventive or diagnostic "
+                "follow-up, a neuro question about longitudinal MRI change, or a safety question about incident patterns."
             )
         },
         "workflow": workflow,

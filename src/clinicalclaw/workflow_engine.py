@@ -7,6 +7,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+try:
+    import yaml
+except ImportError:  # pragma: no cover - dependency is declared for runtime use
+    yaml = None
+
 
 class WorkflowFamily(str, Enum):
     findings_closure = "findings_closure"
@@ -100,8 +105,16 @@ def load_workflows(directory: str | Path) -> list[WorkflowDefinition]:
 
     workflows: list[WorkflowDefinition] = []
     required_keys = {"id", "title", "family", "summary", "problem_statement", "presentation"}
-    for path in sorted(workflow_dir.glob("*.json")):
-        payload = json.loads(path.read_text(encoding="utf-8"))
+    candidate_paths = sorted(workflow_dir.rglob("*.json"))
+    if yaml is not None:
+        candidate_paths += sorted(workflow_dir.rglob("*.yaml"))
+        candidate_paths += sorted(workflow_dir.rglob("*.yml"))
+
+    for path in candidate_paths:
+        if path.suffix == ".json":
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
         if not isinstance(payload, dict) or not required_keys.issubset(payload.keys()):
             continue
         workflows.append(WorkflowDefinition.model_validate(payload))

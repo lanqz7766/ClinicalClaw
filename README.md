@@ -35,6 +35,9 @@ Current implemented areas:
 - unified demo console with:
   - general chat landing page
   - findings closure module
+  - queue triage module
+  - missed diagnosis review module
+  - screening gap closure module
   - router agent
   - neuro longitudinal review module
   - radiation safety monitor module
@@ -65,7 +68,7 @@ The console includes:
 - a simplified general chat landing page
 - lightweight routing into the correct workflow
 - product-style streamed execution feedback
-- a compact workflow dropdown in the top-right navigation
+- progressive topbar flyouts for brand and workflow navigation
 - separate module pages instead of flattening everything into one screen
 - compact module cards that surface 3 to 4 workflows per row on larger screens
 
@@ -80,7 +83,8 @@ Findings closure:
 
 Queue triage:
 
-- mounted inside `/demo`
+- route: `/queue-demo`
+- also mounted inside `/demo`
 - focuses on high-risk referral triage and post-discharge follow-up prioritization
 - demonstrates `high_risk_referral_triage` and `post_discharge_followup`
 - uses a compact risk signal, queue move recommendation, and concise evidence blocks
@@ -91,6 +95,13 @@ Missed diagnosis review:
 - focuses on diagnosis-gap detection from report text and follow-up signals
 - currently demonstrates `missed_vertebral_fracture_detection`
 - uses a compact gap signal, workup recommendation, and review-first evidence summary
+
+Screening gap closure:
+
+- mounted inside `/demo`
+- focuses on open screening follow-up and review-first closure recommendations
+- currently demonstrates `screening_gap_positive_fit_followup`
+- uses a compact gap signal, follow-up recommendation, and reviewer-facing evidence summary
 
 Neuro longitudinal review:
 
@@ -337,10 +348,13 @@ Reusable workflow engine work now in progress:
   - [src/clinicalclaw/workflow_engine.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_engine.py)
 - initial workflow library:
   - [workflows/](/Users/qlan/Documents/Agent/ClinicalClaw/workflows)
+- yaml + md family guidance:
+  - [workflows/families](/Users/qlan/Documents/Agent/ClinicalClaw/workflows/families)
 - executable families:
   - [src/clinicalclaw/workflow_families/findings_closure.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_families/findings_closure.py)
   - [src/clinicalclaw/workflow_families/queue_triage.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_families/queue_triage.py)
   - [src/clinicalclaw/workflow_families/missed_diagnosis.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_families/missed_diagnosis.py)
+  - [src/clinicalclaw/workflow_families/screening_gap.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_families/screening_gap.py)
 - first end-to-end findings module:
   - [src/clinicalclaw/findings_closure.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/findings_closure.py)
   - [src/clinicalclaw/ui/findings/index.html](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/ui/findings/index.html)
@@ -348,6 +362,8 @@ Reusable workflow engine work now in progress:
   - [src/clinicalclaw/queue_triage.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/queue_triage.py)
 - missed diagnosis local module foundation:
   - [src/clinicalclaw/missed_diagnosis.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/missed_diagnosis.py)
+- screening gap local module foundation:
+  - [src/clinicalclaw/screening_gap.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/screening_gap.py)
 
 Presentation skills:
 
@@ -355,6 +371,7 @@ Presentation skills:
 - [skills/findings_brief_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/findings_brief_presenter/SKILL.md)
 - [skills/queue_triage_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/queue_triage_presenter/SKILL.md)
 - [skills/missed_diagnosis_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/missed_diagnosis_presenter/SKILL.md)
+- [skills/screening_gap_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/screening_gap_presenter/SKILL.md)
 - [skills/neuro_report_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/neuro_report_presenter/SKILL.md)
 - [skills/safety_brief_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/safety_brief_presenter/SKILL.md)
 

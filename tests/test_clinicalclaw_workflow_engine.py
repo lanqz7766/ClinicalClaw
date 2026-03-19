@@ -11,11 +11,12 @@ from clinicalclaw.workflow_families.findings_closure import FindingsClosureFamil
 def test_workflow_definitions_load_expected_initial_library():
     workflows = load_workflow_map("workflows")
 
-    assert len(workflows) == 10
+    assert len(workflows) == 11
     assert "critical_lab_escalation" in workflows
     assert workflows["critical_lab_escalation"].family == WorkflowFamily.findings_closure
     assert workflows["high_risk_referral_triage"].family == WorkflowFamily.queue_triage
     assert workflows["unrecognized_af_detection"].family == WorkflowFamily.missed_diagnosis_detection
+    assert workflows["screening_gap_positive_fit_followup"].family == WorkflowFamily.screening_gap_closure
 
 
 def test_workflow_engine_groups_workflows_by_family():
@@ -26,6 +27,7 @@ def test_workflow_engine_groups_workflows_by_family():
     assert "critical_lab_escalation" in families[WorkflowFamily.findings_closure].workflow_ids
     assert WorkflowFamily.queue_triage in families
     assert WorkflowFamily.missed_diagnosis_detection in families
+    assert WorkflowFamily.screening_gap_closure in families
 
 
 def test_workflow_loader_ignores_non_spec_json_payloads_without_ids(tmp_path):
@@ -58,6 +60,53 @@ def test_workflow_loader_skips_incomplete_id_bearing_payloads(tmp_path):
     (tmp_path / "bad.json").write_text(json.dumps(malformed_payload), encoding="utf-8")
 
     assert load_workflow_map(tmp_path) == {}
+
+
+def test_workflow_loader_reads_yaml_specs_when_available(tmp_path):
+    valid_workflow = {
+        "id": "json_queue_workflow",
+        "title": "JSON Queue Workflow",
+        "family": "queue_triage",
+        "summary": "Queue workflow payload.",
+        "problem_statement": "Queue needs prioritization.",
+        "presentation": {"skill": "queue_triage_presenter"},
+    }
+    yaml_like_payload = """
+id: yaml_queue_workflow
+title: YAML Queue Workflow
+family: queue_triage
+summary: Queue workflow payload.
+problem_statement: Queue needs prioritization.
+presentation:
+  skill: queue_triage_presenter
+"""
+
+    (tmp_path / "json_queue_workflow.json").write_text(json.dumps(valid_workflow), encoding="utf-8")
+    (tmp_path / "yaml_queue_workflow.yaml").write_text(yaml_like_payload, encoding="utf-8")
+
+    workflows = load_workflow_map(tmp_path)
+
+    assert "json_queue_workflow" in workflows
+    assert "yaml_queue_workflow" in workflows
+
+
+def test_workflow_loader_recurses_into_family_directories(tmp_path):
+    nested = tmp_path / "screening_gap"
+    nested.mkdir()
+    payload = {
+        "id": "nested_screening_workflow",
+        "title": "Nested Screening Workflow",
+        "family": "screening_gap_closure",
+        "summary": "Nested workflow payload.",
+        "problem_statement": "A screening gap needs review.",
+        "presentation": {"skill": "screening_gap_presenter"},
+    }
+
+    (nested / "nested_screening_workflow.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    workflows = load_workflow_map(tmp_path)
+
+    assert "nested_screening_workflow" in workflows
 
 
 def test_findings_closure_family_can_evaluate_actionable_case():

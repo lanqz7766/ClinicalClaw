@@ -1,0 +1,71 @@
+id: screening_gap_positive_fit_followup
+version: "1.0"
+title: Close Positive FIT Screening Gap
+family: screening_gap_closure
+specialties:
+  - primary_care
+  - gastroenterology
+  - oncology
+status: prototype_ready
+summary: Detect positive FIT results and determine whether diagnostic colonoscopy follow-up still needs to be arranged.
+problem_statement: Positive screening results can remain open when diagnostic colonoscopy is not scheduled or completed.
+live_test_ready: true
+inputs:
+  - name: screening_text
+    source: Screening result text
+    description: Positive FIT result summary.
+  - name: followup_summary
+    source: Follow-up status
+    description: Whether diagnostic colonoscopy has already been ordered or completed.
+    required: false
+  - name: completion_state
+    source: Follow-up state
+    description: Whether the screening gap is already closed.
+    required: false
+trigger_signals:
+  - positive fit
+  - fecal immunochemical
+  - colonoscopy
+  - screening gap
+evidence_sources:
+  - screening_result
+  - screening_history
+  - colonoscopy_status
+rule_sets:
+  - id: screening_gap_followup
+    summary: If FIT is positive and colonoscopy closure is missing, draft the next follow-up workflow.
+actions:
+  - id: review_item
+    label: Create screening review item
+    kind: create_review_item
+    description: Queue a screening follow-up task.
+  - id: order_draft
+    label: Draft colonoscopy order suggestion
+    kind: draft_order
+    description: Prepare the diagnostic next step.
+  - id: owner_notice
+    label: Draft outreach message
+    kind: mock_email
+    description: Prepare outreach for the responsible team.
+    reviewer_required: false
+presentation:
+  skill: screening_gap_presenter
+  sections:
+    - Screening Result
+    - Gap Check
+    - Recommended Next Step
+    - Review Status
+  tone: compact_screening_gap
+examples:
+  - Positive FIT with no documented colonoscopy follow-up is present.
+family_config:
+  actionable_terms:
+    - positive fit
+    - fecal immunochemical
+    - colonoscopy
+    - screening
+  resolved_states:
+    - ordered
+    - scheduled
+    - completed
+    - addressed

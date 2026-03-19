@@ -40,6 +40,13 @@ Workflow definitions live in:
 
 - [workflows/](/Users/qlan/Documents/Agent/ClinicalClaw/workflows)
 
+The engine now supports:
+
+- executable workflow specs in `json`
+- executable workflow specs in `yaml`
+- family guidance in `md`
+- family guidance in `yaml`
+
 ## Presentation Skill
 
 The engine separates decision logic from output formatting.
@@ -50,7 +57,7 @@ The engine separates decision logic from output formatting.
 
 ## Initial Workflow Library
 
-These are the first 10 workflows selected for realistic, mock-testable implementation in the current repository:
+These are the first 11 workflows selected for realistic, mock-testable implementation in the current repository:
 
 1. `actionable_radiology_findings`
 2. `suspicious_lung_nodule_followup`
@@ -62,6 +69,7 @@ These are the first 10 workflows selected for realistic, mock-testable implement
 8. `undiagnosed_hypertension_detection`
 9. `missed_vertebral_fracture_detection`
 10. `unrecognized_af_detection`
+11. `screening_gap_positive_fit_followup`
 
 ## First Implemented Family: Findings Closure
 
@@ -90,16 +98,34 @@ Current code entry points:
 - first family implementation:
   - [src/clinicalclaw/workflow_families/findings_closure.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_families/findings_closure.py)
 
+## Fourth Implemented Family: Screening Gap Closure
+
+The latest family is `screening_gap_closure`.
+
+This family is now organized in the repository with:
+
+- executable runner:
+  - [src/clinicalclaw/workflow_families/screening_gap.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_families/screening_gap.py)
+- local demo store:
+  - [src/clinicalclaw/screening_gap.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/screening_gap.py)
+- executable workflow specs:
+  - [workflows/screening_gap](/Users/qlan/Documents/Agent/ClinicalClaw/workflows/screening_gap)
+- family guidance:
+  - [workflows/families/screening_gap_closure.md](/Users/qlan/Documents/Agent/ClinicalClaw/workflows/families/screening_gap_closure.md)
+  - [workflows/families/screening_gap_closure.yaml](/Users/qlan/Documents/Agent/ClinicalClaw/workflows/families/screening_gap_closure.yaml)
+- presentation skill:
+  - [skills/screening_gap_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/screening_gap_presenter/SKILL.md)
+
 ## Recommended Next Step
 
-Build the first end-to-end executable workflow on top of this family:
+Build the next end-to-end executable workflow on top of `screening_gap_closure`:
 
-- `critical_lab_escalation`
+- `identify_eligible_lung_cancer_screening`
 
-It is the simplest real workflow for validating:
+It is a strong next target for validating:
 
-- intake
-- family normalization
-- action recommendation
-- review gating
-- mock escalation
+- eligibility checking
+- open-gap detection
+- review-first outreach planning
+- queue creation
+- compact clinician-facing presentation

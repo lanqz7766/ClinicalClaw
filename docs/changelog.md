@@ -2,6 +2,11 @@
 
 ## 2026-03-19
 
+- Added a fourth executable workflow family: `screening_gap_closure`, with the first workflow `screening_gap_positive_fit_followup`.
+- Added workflow-engine support for recursive family directories plus `yaml` workflow specs.
+- Added `yaml + md + skill` structure for screening-gap family guidance and presentation.
+- Added a standalone `/queue-demo` page to bring queue triage up to the same demo maturity as findings.
+- Refined `/demo` top navigation into softer flyout-style brand and workflow controls that blend into the page background.
 - Simplified the `/demo` top navigation to a single `Workflows` dropdown and tightened the landing module grid to show smaller workflow cards.
 - Removed internal readiness labels from the product-facing workflow router responses and UI surfaces.
 - Exposed `missed_diagnosis_detection` as a compact module in `/demo`.

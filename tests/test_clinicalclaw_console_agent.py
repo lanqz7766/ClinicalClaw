@@ -37,6 +37,13 @@ class LowConfidenceRouterLLM(LLMProvider):
         )
 
 
+class BrokenRouterLLM(LLMProvider):
+    name = "broken-router"
+
+    async def chat(self, messages: list[LLMMessage], on_chunk=None, cancel_event=None, tools=None):
+        raise RuntimeError("router unavailable")
+
+
 def _build_client():
     from clawagents.gateway.server import create_app
 
@@ -64,6 +71,36 @@ def test_route_with_llm_stays_home_when_confidence_is_low():
     assert payload["suggested_module"] == "neuro"
 
 
+def test_route_with_llm_falls_back_to_queue_when_llm_fails():
+    payload = __import__("asyncio").run(
+        route_with_llm(BrokenRouterLLM(), "Should this referral move into the urgent queue today?")
+    )
+
+    assert payload["workflow_id"] == "queue_triage"
+    assert payload["target_module"] == "queue"
+    assert payload["fallback"] is True
+
+
+def test_route_with_llm_falls_back_to_diagnosis_when_llm_fails():
+    payload = __import__("asyncio").run(
+        route_with_llm(BrokenRouterLLM(), "Does this report suggest a missed vertebral fracture workup gap?")
+    )
+
+    assert payload["workflow_id"] == "missed_diagnosis_detection"
+    assert payload["target_module"] == "diagnosis"
+    assert payload["fallback"] is True
+
+
+def test_route_with_llm_falls_back_to_screening_when_llm_fails():
+    payload = __import__("asyncio").run(
+        route_with_llm(BrokenRouterLLM(), "Does this positive FIT still need colonoscopy follow-up?")
+    )
+
+    assert payload["workflow_id"] == "screening_gap_closure"
+    assert payload["target_module"] == "screening"
+    assert payload["fallback"] is True
+
+
 def test_build_routed_task_mentions_selected_workflow():
     task = build_routed_task(
         {"workflow_id": "neuro_longitudinal"},
@@ -89,6 +126,7 @@ def test_build_console_agent_loads_presentation_skill():
     assert "get_findings_workspace" in allowed
     assert "get_queue_workspace" in allowed
     assert "get_diagnosis_workspace" in allowed
+    assert "get_screening_workspace" in allowed
 
 
 def test_demo_execute_stream_emits_routed_and_done():
@@ -162,3 +200,14 @@ def test_build_routed_task_mentions_missed_diagnosis_presentation_skill():
     assert "Workflow: missed_diagnosis_detection" in task
     assert "clinical_report_presentation" in task
     assert "missed_diagnosis_presenter" in task
+
+
+def test_build_routed_task_mentions_screening_gap_presentation_skill():
+    task = build_routed_task(
+        {"workflow_id": "screening_gap_closure"},
+        "Does this positive FIT still need colonoscopy follow-up?",
+    )
+
+    assert "Workflow: screening_gap_closure" in task
+    assert "clinical_report_presentation" in task
+    assert "screening_gap_presenter" in task

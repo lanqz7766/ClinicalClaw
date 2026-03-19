@@ -1,0 +1,17 @@
+family: screening_gap_closure
+title: Screening Gap Closure
+summary: Identify unresolved screening follow-up, verify whether the gap is already closed, and route the next step into a review-first workflow.
+pattern:
+  - detect screening signal
+  - check closure state
+  - prepare next-step action
+  - route to reviewer
+initial_workflows:
+  - screening_gap_positive_fit_followup
+recommended_skills:
+  - clinical_report_presentation
+  - screening_gap_presenter
+future_workflows:
+  - identify_eligible_lung_cancer_screening
+  - close_cervical_screening_gaps
+  - prompt_diabetic_eye_exam_scheduling

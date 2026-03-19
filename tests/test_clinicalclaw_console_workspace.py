@@ -5,18 +5,20 @@ def test_console_snapshot_includes_multiple_modules():
     payload = console_snapshot()
 
     assert payload["title"] == "ClinicalClaw Console"
-    assert len(payload["workflows"]) >= 5
+    assert len(payload["workflows"]) >= 6
     assert payload["modules"]["findings"]["title"]
     assert payload["modules"]["queue"]["title"]
     assert payload["modules"]["diagnosis"]["title"]
+    assert payload["modules"]["screening"]["title"]
     assert payload["modules"]["neuro"]["title"]
     assert payload["modules"]["safety"]["title"]
 
 
-def test_route_general_query_can_select_findings_queue_diagnosis_neuro_or_safety():
+def test_route_general_query_can_select_findings_queue_diagnosis_screening_neuro_or_safety():
     findings = route_general_query("Does this critical potassium result need urgent escalation?")
     queue = route_general_query("Should this high-risk referral be expedited in the queue today?")
     diagnosis = route_general_query("Does this report suggest a missed vertebral fracture workup gap?")
+    screening = route_general_query("Does this positive FIT still need colonoscopy follow-up?")
     neuro = route_general_query("Review this MRI longitudinal atrophy trend and generate a report.")
     safety = route_general_query("Check whether this radiation plan incident should trigger an alert.")
 
@@ -26,6 +28,8 @@ def test_route_general_query_can_select_findings_queue_diagnosis_neuro_or_safety
     assert "priority_scorer" in queue["suggested_steps"]
     assert diagnosis["target_module"] == "diagnosis"
     assert "workup_recommender" in diagnosis["suggested_steps"]
+    assert screening["target_module"] == "screening"
+    assert "gap_checker" in screening["suggested_steps"]
     assert neuro["target_module"] == "neuro"
     assert "volume_trend_analyzer" in neuro["suggested_steps"]
     assert safety["target_module"] == "safety"

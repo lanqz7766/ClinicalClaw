@@ -1,0 +1,93 @@
+{
+  "workflow_id": "screening_gap_positive_fit_followup",
+  "cases": [
+    {
+      "id": "sg_case_001",
+      "workflow_id": "screening_gap_positive_fit_followup",
+      "title": "Positive FIT without colonoscopy follow-up",
+      "submitted_by": "Population health navigator",
+      "received_at": "2026-03-18T09:10:00+00:00",
+      "status": "new",
+      "owner": "Primary care navigator",
+      "queue": "Colorectal screening closure",
+      "due_at": "2026-03-18T12:00:00+00:00",
+      "patient_label": "Demo Screen A",
+      "service_line": "Primary care",
+      "source_type": "lab",
+      "clinical_context": "Positive stool screening result with overdue colonoscopy follow-up and no order in the chart.",
+      "completion_state": "unknown",
+      "screening_text": "Positive FIT result documented. Colonoscopy is overdue and no order or completion was found.",
+      "followup_summary": "Overdue follow-up has not been placed.",
+      "focus_metric": {"label": "Gap score", "value": 93, "unit": "/100", "delta": "+27 at review", "tone": "urgent"},
+      "trend_points": [
+        {"label": "Intake", "value": 66},
+        {"label": "Navigator", "value": 79},
+        {"label": "Current", "value": 93}
+      ],
+      "evidence_grid": [
+        {"label": "Screening signal", "value": "Positive FIT"},
+        {"label": "Follow-up", "value": "No colonoscopy order"},
+        {"label": "Target action", "value": "Open review item"},
+        {"label": "Current closure", "value": "Open"}
+      ]
+    },
+    {
+      "id": "sg_case_002",
+      "workflow_id": "screening_gap_positive_fit_followup",
+      "title": "Positive FIT already scheduled for colonoscopy",
+      "submitted_by": "Population health navigator",
+      "received_at": "2026-03-18T10:05:00+00:00",
+      "status": "new",
+      "owner": "Primary care navigator",
+      "queue": "Colorectal screening closure",
+      "due_at": "2026-03-25T09:00:00+00:00",
+      "patient_label": "Demo Screen B",
+      "service_line": "Primary care",
+      "source_type": "lab",
+      "clinical_context": "Colonoscopy appointment has already been placed on the schedule.",
+      "completion_state": "scheduled",
+      "screening_text": "Positive FIT result documented. Colonoscopy is scheduled next week.",
+      "followup_summary": "Diagnostic colonoscopy booking confirmed.",
+      "focus_metric": {"label": "Gap score", "value": 49, "unit": "/100", "delta": "Follow-up scheduled", "tone": "watch"},
+      "trend_points": [
+        {"label": "Intake", "value": 49},
+        {"label": "Registry", "value": 49}
+      ],
+      "evidence_grid": [
+        {"label": "Screening signal", "value": "Positive FIT"},
+        {"label": "Follow-up", "value": "Colonoscopy scheduled"},
+        {"label": "Target action", "value": "Confirm booking"},
+        {"label": "Current closure", "value": "Scheduled"}
+      ]
+    },
+    {
+      "id": "sg_case_003",
+      "workflow_id": "screening_gap_positive_fit_followup",
+      "title": "Positive FIT with delayed diagnostic follow-up",
+      "submitted_by": "Screening registry feed",
+      "received_at": "2026-03-18T14:25:00+00:00",
+      "status": "new",
+      "owner": "Colorectal screening coordinator",
+      "queue": "Open screening gaps",
+      "due_at": "2026-03-18T18:00:00+00:00",
+      "patient_label": "Demo Screen C",
+      "service_line": "Gastroenterology",
+      "source_type": "lab",
+      "clinical_context": "Follow-up has not been documented in the chart.",
+      "completion_state": "unknown",
+      "screening_text": "Positive FIT remains unresolved. Colonoscopy follow-up is not documented.",
+      "followup_summary": "No diagnostic step is recorded.",
+      "focus_metric": {"label": "Gap score", "value": 80, "unit": "/100", "delta": "+15 at triage", "tone": "alert"},
+      "trend_points": [
+        {"label": "Initial", "value": 65},
+        {"label": "Triage", "value": 80}
+      ],
+      "evidence_grid": [
+        {"label": "Screening signal", "value": "Positive FIT"},
+        {"label": "Follow-up", "value": "Delayed and undocumented"},
+        {"label": "Target action", "value": "Prompt clinician review"},
+        {"label": "Current closure", "value": "Open"}
+      ]
+    }
+  ]
+}
