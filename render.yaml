@@ -3,7 +3,7 @@ services:
     name: clinicalclaw-demo
     runtime: python
     buildCommand: pip install --upgrade pip && pip install -e ".[all]"
-    startCommand: bash -lc 'clinicalclaw --serve --port ${PORT:-10000}'
+    startCommand: bash -lc 'python -m clinicalclaw --serve --port ${PORT:-10000}'
     healthCheckPath: /health
     autoDeploy: true
     envVars:
