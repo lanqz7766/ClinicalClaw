@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: clinicalclaw-demo
+    runtime: python
+    buildCommand: pip install --upgrade pip && pip install -e ".[all]"
+    startCommand: bash -lc 'clinicalclaw --serve --port ${PORT:-10000}'
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: CLINICALCLAW_ENVIRONMENT
+        value: production
+      - key: CLINICALCLAW_EHR_CONNECTOR_MODE
+        value: mock
+      - key: CLINICALCLAW_IMAGING_CONNECTOR_MODE
+        value: mock
+      - key: STREAMING
+        value: "1"
+      - key: MAX_ITERATIONS
+        value: "120"
+      - key: PROVIDER
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - key: GATEWAY_API_KEY
+        sync: false
