@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClinicalClaw Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/demo-assets/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <p class="eyebrow">ClinicalClaw</p>
+          <h1>Clinical Console</h1>
+        </div>
+        <nav class="topnav" aria-label="Primary navigation">
+          <button class="nav-item active" data-page="home" type="button">Home</button>
+          <button class="nav-item" data-page="workflows" type="button">Workflows</button>
+          <button class="nav-item" data-page="neuro" type="button">Neuro</button>
+          <button class="nav-item" data-page="safety" type="button">Safety</button>
+        </nav>
+      </header>
+
+      <main class="page-stack">
+        <section class="page-panel active" data-page-panel="home">
+          <section class="landing">
+            <div class="landing-copy">
+              <p class="eyebrow">General Clinical Command</p>
+              <h2>Tell ClinicalClaw what you want to do.</h2>
+              <p id="page-subtitle" class="support-copy"></p>
+            </div>
+
+            <article class="conversation-shell">
+              <div id="command-prompts" class="prompt-row centered"></div>
+              <div id="home-chat-log" class="chat-log landing-chat"></div>
+              <div id="router-card" class="router-card"></div>
+              <form id="command-form" class="composer">
+                <div class="composer-field">
+                  <textarea id="command-input" rows="3" placeholder="Describe a clinical task, and ClinicalClaw will route it to the right workflow."></textarea>
+                  <button class="primary-button composer-send" type="submit">Send</button>
+                </div>
+                <div class="composer-meta">
+                  <span class="hint">Natural-language entry point with lightweight routing and tool use.</span>
+                </div>
+              </form>
+            </article>
+
+            <section class="landing-workflows">
+              <div class="section-header">
+                <div>
+                  <p class="section-label">Available workflows</p>
+                  <h3>Start from a predefined module when you already know the task.</h3>
+                </div>
+                <button class="ghost-button" data-open-module="workflows" type="button">Browse all</button>
+              </div>
+              <div id="landing-workflow-cards" class="workflow-grid compact"></div>
+            </section>
+          </section>
+        </section>
+
+        <section class="page-panel" data-page-panel="workflows">
+          <section class="registry-header">
+            <div>
+              <p class="eyebrow">Workflow Registry</p>
+              <h2>Defined scenarios and reusable modules</h2>
+              <p class="support-copy">Each workflow becomes its own workspace instead of being flattened into the landing page.</p>
+            </div>
+          </section>
+          <div id="workflow-grid" class="workflow-grid"></div>
+        </section>
+
+        <section class="page-panel" data-page-panel="neuro">
+          <section class="module-page">
+            <header class="module-page-header">
+              <div>
+                <p class="eyebrow">Neuro Longitudinal Review</p>
+                <h2 id="patient-name">Loading...</h2>
+                <p id="patient-summary" class="support-copy"></p>
+                <div id="patient-meta" class="meta-row chips"></div>
+              </div>
+              <div class="module-header-side">
+                <span id="review-badge" class="status-badge">In Review</span>
+                <span id="risk-pill" class="pill pill-risk">High attention</span>
+              </div>
+            </header>
+
+            <div class="module-layout">
+              <aside class="module-rail">
+                <section class="card compact">
+                  <p class="section-label">Cases</p>
+                  <div id="neuro-case-list" class="case-list"></div>
+                </section>
+
+                <section class="card compact">
+                  <p class="section-label">Uploads</p>
+                  <label class="upload-dropzone" for="file-input">
+                    <input id="file-input" type="file" multiple />
+                    <strong>Attach notes</strong>
+                    <span>Prototype only</span>
+                  </label>
+                  <div id="upload-list" class="upload-list"></div>
+                </section>
+              </aside>
+
+              <section class="module-content">
+                <div id="metric-grid" class="metric-grid"></div>
+
+                <nav class="subnav">
+                  <button class="subnav-item active" data-neuro-view="command" type="button">Command</button>
+                  <button class="subnav-item" data-neuro-view="analysis" type="button">Analysis</button>
+                  <button class="subnav-item" data-neuro-view="review" type="button">Review</button>
+                </nav>
+
+                <section class="subpanel active" data-neuro-panel="command">
+                  <div class="grid two-col">
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Chat Workspace</p>
+                          <h3>Natural language task entry</h3>
+                        </div>
+                      </div>
+                      <div class="prompt-row">
+                        <button class="prompt-chip neuro-prompt" data-prompt="Generate the hippocampal atrophy report for this patient.">Generate report</button>
+                        <button class="prompt-chip neuro-prompt" data-prompt="Explain why the case is flagged as accelerated decline.">Explain risk</button>
+                        <button class="prompt-chip neuro-prompt" data-prompt="Summarize the longitudinal MRI trend for the physician reviewer.">Summarize trend</button>
+                      </div>
+                      <div id="chat-log" class="chat-log"></div>
+                      <form id="chat-form" class="chat-form">
+                        <textarea id="chat-input" rows="3" placeholder="Ask for a report or trend explanation."></textarea>
+                        <div class="actions-row">
+                          <span class="hint">Controlled neuro workflow, not free-form diagnosis.</span>
+                          <button type="submit" class="primary-button">Send task</button>
+                        </div>
+                      </form>
+                    </article>
+
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Workflow</p>
+                          <h3 id="workflow-title">Longitudinal review workflow</h3>
+                        </div>
+                        <span id="workflow-status" class="pill">Ready</span>
+                      </div>
+                      <p id="workflow-objective" class="support-copy"></p>
+                      <div id="workflow-steps" class="workflow-steps"></div>
+                    </article>
+                  </div>
+                </section>
+
+                <section class="subpanel" data-neuro-panel="analysis">
+                  <div class="grid two-col">
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Trend</p>
+                          <h3>Bilateral hippocampal volume</h3>
+                        </div>
+                      </div>
+                      <div id="attention-banner" class="attention-banner"></div>
+                      <div class="chart-card">
+                        <div class="chart-header">
+                          <span>Volume vs time</span>
+                          <span class="chart-legend">
+                            <i class="legend-dot legend-blue"></i> Left
+                            <i class="legend-dot legend-teal"></i> Right
+                            <i class="legend-dot legend-slate"></i> Total
+                          </span>
+                        </div>
+                        <svg id="trend-chart" class="trend-chart" viewBox="0 0 560 240" aria-label="Hippocampal trend chart"></svg>
+                      </div>
+                      <div id="timeline" class="timeline compact-list"></div>
+                    </article>
+
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Report</p>
+                          <h3 id="report-title">Longitudinal report</h3>
+                        </div>
+                      </div>
+                      <img id="preview-image" class="preview-image" src="" alt="Representative MRI preview" />
+                      <p id="preview-caption" class="support-copy"></p>
+                      <p id="report-summary" class="hero-summary report-summary"></p>
+                      <div id="report-sections" class="report-sections"></div>
+                      <div class="question-card">
+                        <p class="section-label">Physician follow-up</p>
+                        <ul id="physician-questions" class="question-list"></ul>
+                      </div>
+                    </article>
+                  </div>
+                </section>
+
+                <section class="subpanel" data-neuro-panel="review">
+                  <div class="grid two-col">
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Reviewer Actions</p>
+                          <h3>Approve, reject, comment</h3>
+                        </div>
+                      </div>
+                      <textarea id="review-comment" rows="4" placeholder="Add reviewer feedback"></textarea>
+                      <div class="actions-row">
+                        <button class="ghost-button" data-review-action="comment" type="button">Save comment</button>
+                        <button class="ghost-button warning" data-review-action="reject" type="button">Reject</button>
+                        <button class="primary-button" data-review-action="approve" type="button">Approve</button>
+                      </div>
+                      <div id="review-history" class="review-history"></div>
+                    </article>
+
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Trace</p>
+                          <h3>Recent audit</h3>
+                        </div>
+                      </div>
+                      <div id="audit-list" class="audit-list"></div>
+                    </article>
+                  </div>
+                </section>
+              </section>
+            </div>
+          </section>
+        </section>
+
+        <section class="page-panel" data-page-panel="safety">
+          <section class="module-page">
+            <header class="module-page-header">
+              <div>
+                <p class="eyebrow">Radiation Safety Monitor</p>
+                <h2 id="safety-case-title">Loading case...</h2>
+                <p id="safety-case-subtitle" class="support-copy"></p>
+                <div id="safety-case-meta" class="meta-row chips"></div>
+              </div>
+              <div class="module-header-side">
+                <span id="safety-risk-badge" class="risk-badge">Watch</span>
+                <span id="safety-review-badge" class="status-badge">Open</span>
+              </div>
+            </header>
+
+            <div class="module-layout">
+              <aside class="module-rail">
+                <section class="card compact">
+                  <p class="section-label">Queue</p>
+                  <div id="queue-summary" class="queue-summary"></div>
+                  <div id="safety-case-list" class="case-list"></div>
+                </section>
+              </aside>
+
+              <section class="module-content">
+                <div id="safety-summary-cards" class="summary-cards"></div>
+
+                <nav class="subnav">
+                  <button class="subnav-item active" data-safety-view="overview" type="button">Overview</button>
+                  <button class="subnav-item" data-safety-view="evidence" type="button">Evidence</button>
+                  <button class="subnav-item" data-safety-view="review" type="button">Review</button>
+                </nav>
+
+                <section class="subpanel active" data-safety-panel="overview">
+                  <div class="grid two-col">
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Intake</p>
+                          <h3>Incoming case</h3>
+                        </div>
+                      </div>
+                      <div id="intake-fields" class="field-grid"></div>
+                      <div class="text-card">
+                        <p class="section-label">Submitted narrative</p>
+                        <p id="case-text"></p>
+                      </div>
+                      <div id="timeline-list" class="timeline-list"></div>
+                    </article>
+
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Top match</p>
+                          <h3 id="top-match-title">Top failure mode</h3>
+                        </div>
+                      </div>
+                      <div id="risk-summary" class="attention-card"></div>
+                      <div id="top-match-details" class="match-detail"></div>
+                    </article>
+                  </div>
+                </section>
+
+                <section class="subpanel" data-safety-panel="evidence">
+                  <div class="grid two-col">
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Historical evidence</p>
+                          <h3>Matched patterns</h3>
+                        </div>
+                      </div>
+                      <div id="match-list" class="match-list"></div>
+                    </article>
+
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Mitigation</p>
+                          <h3>Playbook and prompts</h3>
+                        </div>
+                      </div>
+                      <div id="recommended-checks" class="check-list"></div>
+                      <div id="review-questions" class="question-list"></div>
+                      <div id="email-card" class="email-card"></div>
+                      <div class="actions-row spaced-top">
+                        <button id="rerun-button" class="ghost-button" type="button">Rerun matcher</button>
+                      </div>
+                    </article>
+                  </div>
+                </section>
+
+                <section class="subpanel" data-safety-panel="review">
+                  <div class="grid two-col">
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Reviewer Actions</p>
+                          <h3>Acknowledge, approve, reject</h3>
+                        </div>
+                      </div>
+                      <textarea id="safety-review-comment" rows="4" placeholder="Add QA reviewer context"></textarea>
+                      <div class="actions-row">
+                        <button class="ghost-button" data-safety-review-action="watch" type="button">Mark watch</button>
+                        <button class="ghost-button" data-safety-review-action="approve" type="button">Approve</button>
+                        <button class="primary-button danger" data-safety-review-action="reject" type="button">Reject</button>
+                      </div>
+                      <div id="review-history-safety" class="review-history"></div>
+                    </article>
+
+                    <article class="card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Audit</p>
+                          <h3>Recent trace</h3>
+                        </div>
+                      </div>
+                      <div id="audit-list-safety" class="audit-list"></div>
+                    </article>
+                  </div>
+                </section>
+              </section>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="/demo-assets/app.js" defer></script>
+  </body>
+</html>

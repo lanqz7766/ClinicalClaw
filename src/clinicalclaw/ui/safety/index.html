@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClinicalClaw Safety Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/safety-assets/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="case-rail">
+        <div class="brand-card">
+          <p class="eyebrow">ClinicalClaw</p>
+          <h1>Safety Monitor</h1>
+          <p>Radiation oncology workflow surveillance with explainable case matching.</p>
+        </div>
+
+        <section class="rail-block">
+          <div class="rail-heading">
+            <div>
+              <p class="section-label">Queue</p>
+              <h2>Incoming Cases</h2>
+            </div>
+          </div>
+          <div id="queue-summary" class="queue-summary"></div>
+          <div id="case-list" class="case-list"></div>
+        </section>
+
+        <section class="rail-block">
+          <div class="rail-heading">
+            <div>
+              <p class="section-label">Library</p>
+              <h2>Failure Modes</h2>
+            </div>
+          </div>
+          <div id="kb-list" class="kb-list"></div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">RO-ILS-Inspired Case Workspace</p>
+            <h2 id="case-title">Loading case...</h2>
+            <p id="case-subtitle" class="support-copy"></p>
+            <div id="case-meta" class="meta-row chips"></div>
+          </div>
+          <div class="hero-side">
+            <span id="risk-badge" class="risk-badge">Watch</span>
+            <span id="review-badge" class="status-pill">Open</span>
+          </div>
+        </header>
+
+        <section class="hero-metrics card compact">
+          <div id="summary-cards" class="summary-cards"></div>
+        </section>
+
+        <nav class="view-nav" aria-label="Case views">
+          <button class="view-tab active" data-view-tab="overview" type="button">Overview</button>
+          <button class="view-tab" data-view-tab="evidence" type="button">Evidence</button>
+          <button class="view-tab" data-view-tab="actions" type="button">Actions</button>
+          <button class="view-tab" data-view-tab="review" type="button">Review</button>
+        </nav>
+
+        <section class="view-panel active" data-view-panel="overview">
+          <div class="grid two-col">
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Intake</p>
+                  <h3>Case snapshot</h3>
+                </div>
+              </div>
+              <div id="intake-fields" class="field-grid"></div>
+              <div class="text-card">
+                <p class="section-label">Submitted narrative</p>
+                <p id="case-text"></p>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Command</p>
+                  <h3>Ask the monitor</h3>
+                </div>
+              </div>
+              <div class="prompt-row">
+                <button class="prompt-chip" data-question="Why was this case flagged?">Why flagged?</button>
+                <button class="prompt-chip" data-question="Would this trigger an email alert?">Email alert?</button>
+                <button class="prompt-chip" data-question="What should the owner do next?">Next steps</button>
+              </div>
+              <div id="chat-log" class="chat-log"></div>
+              <form id="question-form" class="question-form">
+                <textarea id="question-input" rows="3" placeholder="Ask how the case maps to known failure modes."></textarea>
+                <div class="actions-row">
+                  <span class="hint">Free-text explainability grounded in matched incidents.</span>
+                  <button class="primary-button" type="submit">Ask</button>
+                </div>
+              </form>
+            </article>
+          </div>
+
+          <div class="grid two-col">
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Timeline</p>
+                  <h3>Case progression</h3>
+                </div>
+              </div>
+              <div id="timeline-list" class="timeline-list"></div>
+            </article>
+
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Top match</p>
+                  <h3 id="top-match-title">Top failure mode</h3>
+                </div>
+              </div>
+              <div id="risk-summary" class="attention-card"></div>
+              <div id="top-match-details" class="match-detail"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view-panel" data-view-panel="evidence">
+          <div class="grid two-col">
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Evidence</p>
+                  <h3>Matched historical patterns</h3>
+                </div>
+              </div>
+              <div id="match-list" class="match-list"></div>
+            </article>
+
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Review prompts</p>
+                  <h3>Questions to answer before release</h3>
+                </div>
+              </div>
+              <div id="review-questions" class="question-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view-panel" data-view-panel="actions">
+          <div class="grid two-col">
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Mitigation</p>
+                  <h3>Action playbook</h3>
+                </div>
+              </div>
+              <div id="recommended-checks" class="check-list"></div>
+              <div class="actions-row spaced-top">
+                <button id="rerun-button" class="ghost-button" type="button">Rerun matcher</button>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Escalation</p>
+                  <h3>Mock email preview</h3>
+                </div>
+              </div>
+              <div id="email-card" class="email-card"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view-panel" data-view-panel="review">
+          <div class="grid two-col">
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Reviewer Actions</p>
+                  <h3>Acknowledge, approve, reject</h3>
+                </div>
+              </div>
+              <textarea id="review-comment" rows="4" placeholder="Add QA reviewer context"></textarea>
+              <div class="actions-row">
+                <button class="ghost-button" data-review-action="watch" type="button">Mark watch</button>
+                <button class="ghost-button" data-review-action="approve" type="button">Approve</button>
+                <button class="primary-button danger" data-review-action="reject" type="button">Reject</button>
+              </div>
+              <div id="review-history" class="review-history"></div>
+            </article>
+
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Audit</p>
+                  <h3>Recent trace</h3>
+                </div>
+              </div>
+              <div id="audit-list" class="audit-list"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/safety-assets/app.js" defer></script>
+  </body>
+</html>
