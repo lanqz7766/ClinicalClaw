@@ -1,0 +1,36 @@
+{
+  "id": "suspicious_lung_nodule_followup",
+  "version": "1.0",
+  "title": "Schedule Follow-Up for Suspicious Lung Nodules",
+  "family": "findings_closure",
+  "specialties": ["radiology", "pulmonology"],
+  "status": "prototype_ready",
+  "summary": "Detect lung nodule follow-up language in radiology text and draft surveillance next steps.",
+  "problem_statement": "Incidental or suspicious nodules can be documented in reports without reliable follow-up closure.",
+  "live_test_ready": true,
+  "inputs": [
+    {"name": "report_text", "source": "CT report text", "description": "Chest CT or thoracic imaging report text."},
+    {"name": "completion_state", "source": "Workflow state", "description": "Whether surveillance imaging has already been scheduled.", "required": false}
+  ],
+  "trigger_signals": ["nodule", "suspicious", "follow-up CT", "surveillance"],
+  "evidence_sources": ["radiology_report", "prior_imaging_status"],
+  "rule_sets": [
+    {"id": "lung_nodule_surveillance", "summary": "If suspicious nodule language exists and surveillance is not closed, draft guideline-aligned follow-up."}
+  ],
+  "actions": [
+    {"id": "review_item", "label": "Create nodule review item", "kind": "create_review_item", "description": "Queue a radiology or pulmonary review."},
+    {"id": "schedule_draft", "label": "Draft surveillance scheduling plan", "kind": "draft_schedule", "description": "Prepare a surveillance scheduling recommendation."},
+    {"id": "owner_notice", "label": "Draft pulmonary notification", "kind": "mock_email", "description": "Prepare a concise clinician message.", "reviewer_required": false}
+  ],
+  "presentation": {
+    "skill": "clinical_report_presentation",
+    "sections": ["Nodule Summary", "Follow-Up Need", "Recommended Interval", "Review Status"]
+  },
+  "examples": [
+    "There is a suspicious pulmonary nodule and 6-month CT follow-up is advised."
+  ],
+  "family_config": {
+    "actionable_terms": ["nodule", "follow-up CT", "surveillance", "suspicious"],
+    "resolved_states": ["scheduled", "completed", "addressed"]
+  }
+}

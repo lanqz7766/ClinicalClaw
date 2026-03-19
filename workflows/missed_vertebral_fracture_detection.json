@@ -1,0 +1,36 @@
+{
+  "id": "missed_vertebral_fracture_detection",
+  "version": "1.0",
+  "title": "Find Missed Vertebral Fractures",
+  "family": "missed_diagnosis_detection",
+  "specialties": ["radiology", "primary_care"],
+  "status": "prototype_ready",
+  "summary": "Detect vertebral fracture language in radiology text and check whether osteoporosis evaluation was triggered.",
+  "problem_statement": "Vertebral fractures can be described in reports without triggering downstream osteoporosis workup.",
+  "live_test_ready": true,
+  "inputs": [
+    {"name": "report_text", "source": "Radiology report text", "description": "Report text that may mention vertebral compression fractures."},
+    {"name": "followup_summary", "source": "Follow-up status", "description": "Whether osteoporosis evaluation has already been initiated.", "required": false}
+  ],
+  "trigger_signals": ["compression fracture", "vertebral fracture", "osteoporosis workup"],
+  "evidence_sources": ["radiology_report", "follow_up_status"],
+  "rule_sets": [
+    {"id": "vertebral_fracture_gap", "summary": "If vertebral fracture language is present without downstream evaluation, flag a likely missed diagnosis pathway."}
+  ],
+  "actions": [
+    {"id": "review_item", "label": "Create fracture follow-up review item", "kind": "create_review_item", "description": "Queue a fracture closure task."},
+    {"id": "followup_plan", "label": "Draft osteoporosis workup plan", "kind": "draft_followup_plan", "description": "Prepare the follow-up recommendation."},
+    {"id": "owner_notice", "label": "Draft PCP notification", "kind": "mock_email", "description": "Prepare a brief notification.", "reviewer_required": false}
+  ],
+  "presentation": {
+    "skill": "missed_diagnosis_presenter",
+    "sections": ["Gap Signal", "Follow-up Check", "Recommended Workup", "Review Status"],
+    "tone": "compact_review_gap"
+  },
+  "examples": [
+    "The report mentions a vertebral compression fracture but I do not see workup."
+  ],
+  "family_config": {
+    "evidence_terms": ["compression fracture", "vertebral fracture", "osteoporosis"]
+  }
+}

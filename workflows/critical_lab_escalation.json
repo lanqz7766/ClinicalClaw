@@ -1,0 +1,37 @@
+{
+  "id": "critical_lab_escalation",
+  "version": "1.0",
+  "title": "Escalate Abnormal Critical Lab Values",
+  "family": "findings_closure",
+  "specialties": ["system_level", "primary_care"],
+  "status": "prototype_ready",
+  "summary": "Detect critical lab values, determine whether escalation has already occurred, and prepare urgent next steps.",
+  "problem_statement": "Critical lab values require rapid escalation and documented follow-up but can still be missed in busy workflows.",
+  "live_test_ready": true,
+  "inputs": [
+    {"name": "lab_text", "source": "Lab result summary", "description": "Critical result text or structured lab summary."},
+    {"name": "completion_state", "source": "Workflow state", "description": "Whether the result has already been acknowledged or escalated.", "required": false}
+  ],
+  "trigger_signals": ["critical", "high potassium", "low sodium", "panic value"],
+  "evidence_sources": ["lab_result", "responsible_clinician", "follow_up_status"],
+  "rule_sets": [
+    {"id": "critical_lab_escalation", "summary": "If the lab text indicates a critical value and no closure is recorded, mark urgent and prepare escalation."}
+  ],
+  "actions": [
+    {"id": "review_item", "label": "Create urgent review item", "kind": "create_review_item", "description": "Open an urgent escalation case."},
+    {"id": "owner_notice", "label": "Draft urgent clinician alert", "kind": "mock_email", "description": "Prepare an urgent outbound message.", "reviewer_required": false},
+    {"id": "followup_plan", "label": "Draft rapid follow-up plan", "kind": "draft_followup_plan", "description": "Prepare the immediate next-step checklist."}
+  ],
+  "presentation": {
+    "skill": "clinical_report_presentation",
+    "sections": ["Critical Result", "Escalation Status", "Immediate Next Step", "Review Status"]
+  },
+  "examples": [
+    "Potassium 6.4 mmol/L, critical high. Please notify responsible clinician immediately."
+  ],
+  "family_config": {
+    "actionable_terms": ["critical", "panic", "abnormal", "notify"],
+    "urgent_terms": ["critical", "immediately", "stat", "panic"],
+    "resolved_states": ["acknowledged", "completed", "addressed", "resolved"]
+  }
+}

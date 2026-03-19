@@ -1,0 +1,36 @@
+{
+  "id": "positive_fit_followup",
+  "version": "1.0",
+  "title": "Close Loop on Positive FIT",
+  "family": "findings_closure",
+  "specialties": ["primary_care", "oncology"],
+  "status": "prototype_ready",
+  "summary": "Detect positive FIT results and determine whether diagnostic colonoscopy follow-up still needs to be arranged.",
+  "problem_statement": "Positive FIT results can remain open if colonoscopy follow-up is not coordinated quickly.",
+  "live_test_ready": true,
+  "inputs": [
+    {"name": "lab_text", "source": "FIT result text", "description": "Positive FIT result summary."},
+    {"name": "completion_state", "source": "Follow-up status", "description": "Whether diagnostic colonoscopy has already been ordered or completed.", "required": false}
+  ],
+  "trigger_signals": ["positive fit", "fecal immunochemical", "colonoscopy"],
+  "evidence_sources": ["lab_result", "screening_history", "colonoscopy_status"],
+  "rule_sets": [
+    {"id": "positive_fit_followup", "summary": "If FIT is positive and no colonoscopy closure exists, draft the next diagnostic step."}
+  ],
+  "actions": [
+    {"id": "review_item", "label": "Create FIT review item", "kind": "create_review_item", "description": "Queue a colorectal screening closure task."},
+    {"id": "order_draft", "label": "Draft colonoscopy order suggestion", "kind": "draft_order", "description": "Prepare a colonoscopy recommendation."},
+    {"id": "owner_notice", "label": "Draft outreach message", "kind": "mock_email", "description": "Prepare outreach for the responsible team.", "reviewer_required": false}
+  ],
+  "presentation": {
+    "skill": "clinical_report_presentation",
+    "sections": ["FIT Result", "Closure Check", "Recommended Diagnostic Step", "Review Status"]
+  },
+  "examples": [
+    "FIT positive and no documented colonoscopy follow-up is present."
+  ],
+  "family_config": {
+    "actionable_terms": ["positive", "fit", "colonoscopy", "diagnostic"],
+    "resolved_states": ["ordered", "scheduled", "completed", "addressed"]
+  }
+}

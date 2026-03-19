@@ -129,3 +129,37 @@ def test_chat_with_scenario_reauth_required_returns_structured_payload():
         assert payload["success"] is False
         assert payload["status"] == "reauth_required"
         assert payload["result"]["action"] == "launch SMART auth"
+
+
+def test_queue_routes_expose_workspace_and_case():
+    with patch("clawagents.gateway.server.load_config", return_value=MagicMock()), \
+         patch("clawagents.gateway.server.get_default_model", return_value="gpt-5-mini"), \
+         patch("clawagents.gateway.server.create_provider", return_value=MagicMock(name="fake-llm")):
+        client = _build_client()
+
+        workspace_response = client.get("/api/queue/workspace")
+        assert workspace_response.status_code == 200
+        payload = workspace_response.json()
+        assert payload["default_case_id"]
+        assert payload["workspace"]["title"]
+
+        case_response = client.get(f"/api/queue/cases/{payload['default_case_id']}")
+        assert case_response.status_code == 200
+        assert case_response.json()["workflow_id"] in {"high_risk_referral_triage", "post_discharge_followup"}
+
+
+def test_diagnosis_routes_expose_workspace_and_case():
+    with patch("clawagents.gateway.server.load_config", return_value=MagicMock()), \
+         patch("clawagents.gateway.server.get_default_model", return_value="gpt-5-mini"), \
+         patch("clawagents.gateway.server.create_provider", return_value=MagicMock(name="fake-llm")):
+        client = _build_client()
+
+        workspace_response = client.get("/api/diagnosis/workspace")
+        assert workspace_response.status_code == 200
+        payload = workspace_response.json()
+        assert payload["default_case_id"]
+        assert payload["workspace"]["title"]
+
+        case_response = client.get(f"/api/diagnosis/cases/{payload['default_case_id']}")
+        assert case_response.status_code == 200
+        assert case_response.json()["workflow_id"] == "missed_vertebral_fracture_detection"

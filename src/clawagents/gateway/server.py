@@ -24,6 +24,9 @@ from clinicalclaw.demo_workspace import demo_workspace_store
 from clinicalclaw.console_workspace import console_snapshot, route_general_query
 from clinicalclaw.console_agent import build_console_agent, build_routed_task, route_with_llm
 from clinicalclaw.execution import ClinicalClawService
+from clinicalclaw.findings_closure import findings_closure_store
+from clinicalclaw.missed_diagnosis import missed_diagnosis_store
+from clinicalclaw.queue_triage import queue_triage_store
 from clinicalclaw.safety_monitor import safety_monitor_store
 
 VALID_LANES = {"main", "cron", "subagent", "nested"}
@@ -58,6 +61,8 @@ def create_app() -> tuple:
     demo_index = demo_root / "index.html"
     safety_root = Path(__file__).resolve().parents[2] / "clinicalclaw" / "ui" / "safety"
     safety_index = safety_root / "index.html"
+    findings_root = Path(__file__).resolve().parents[2] / "clinicalclaw" / "ui" / "findings"
+    findings_index = findings_root / "index.html"
 
     cors_origins = os.getenv("GATEWAY_CORS_ORIGINS", "*").split(",")
     app.add_middleware(
@@ -71,6 +76,8 @@ def create_app() -> tuple:
         app.mount("/demo-assets", StaticFiles(directory=str(demo_root)), name="demo-assets")
     if safety_root.exists():
         app.mount("/safety-assets", StaticFiles(directory=str(safety_root)), name="safety-assets")
+    if findings_root.exists():
+        app.mount("/findings-assets", StaticFiles(directory=str(findings_root)), name="findings-assets")
 
     @app.get("/health")
     async def health():
@@ -306,6 +313,300 @@ def create_app() -> tuple:
         if not safety_index.exists():
             return Response(content="Safety demo UI is not available.", status_code=404)
         return FileResponse(safety_index)
+
+    @app.get("/findings-demo")
+    async def findings_demo_page():
+        if not findings_index.exists():
+            return Response(content="Findings demo UI is not available.", status_code=404)
+        return FileResponse(findings_index)
+
+    @app.get("/api/findings/workspace")
+    async def findings_workspace():
+        return findings_closure_store.snapshot()
+
+    @app.get("/api/findings/cases/{case_id}")
+    async def findings_case(case_id: str):
+        try:
+            return findings_closure_store.get_case(case_id)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown findings case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.post("/api/findings/rerun")
+    async def findings_rerun(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            return Response(
+                content=json.dumps({"error": 'Invalid JSON. Send { "case_id": "..." }'}),
+                status_code=400,
+                media_type="application/json",
+            )
+        case_id = payload.get("case_id")
+        if not case_id:
+            return Response(
+                content=json.dumps({"error": "case_id is required"}),
+                status_code=400,
+                media_type="application/json",
+            )
+        try:
+            return findings_closure_store.rerun(case_id=case_id)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown findings case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.post("/api/findings/review")
+    async def findings_review(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            return Response(
+                content=json.dumps({"error": 'Invalid JSON. Send { "case_id": "...", "action": "...", "comment": "..." }'}),
+                status_code=400,
+                media_type="application/json",
+            )
+        case_id = payload.get("case_id")
+        action = (payload.get("action") or "").strip()
+        comment = (payload.get("comment") or "").strip() or None
+        if not case_id or not action:
+            return Response(
+                content=json.dumps({"error": "case_id and action are required"}),
+                status_code=400,
+                media_type="application/json",
+            )
+        try:
+            return findings_closure_store.review(case_id=case_id, action=action, comment=comment)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown findings case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.post("/api/findings/explain")
+    async def findings_explain(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            return Response(
+                content=json.dumps({"error": 'Invalid JSON. Send { "case_id": "...", "question": "..." }'}),
+                status_code=400,
+                media_type="application/json",
+            )
+        case_id = payload.get("case_id")
+        question = (payload.get("question") or "").strip()
+        if not case_id or not question:
+            return Response(
+                content=json.dumps({"error": "case_id and question are required"}),
+                status_code=400,
+                media_type="application/json",
+            )
+        try:
+            return findings_closure_store.explain(case_id=case_id, question=question)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown findings case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.get("/api/queue/workspace")
+    async def queue_workspace():
+        return queue_triage_store.snapshot()
+
+    @app.get("/api/queue/cases/{case_id}")
+    async def queue_case(case_id: str):
+        try:
+            return queue_triage_store.get_case(case_id)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown queue case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.post("/api/queue/rerun")
+    async def queue_rerun(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            return Response(
+                content=json.dumps({"error": 'Invalid JSON. Send { "case_id": "..." }'}),
+                status_code=400,
+                media_type="application/json",
+            )
+        case_id = payload.get("case_id")
+        if not case_id:
+            return Response(
+                content=json.dumps({"error": "case_id is required"}),
+                status_code=400,
+                media_type="application/json",
+            )
+        try:
+            return queue_triage_store.rerun(case_id=case_id)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown queue case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.post("/api/queue/review")
+    async def queue_review(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            return Response(
+                content=json.dumps({"error": 'Invalid JSON. Send { "case_id": "...", "action": "...", "comment": "..." }'}),
+                status_code=400,
+                media_type="application/json",
+            )
+        case_id = payload.get("case_id")
+        action = (payload.get("action") or "").strip()
+        comment = (payload.get("comment") or "").strip() or None
+        if not case_id or not action:
+            return Response(
+                content=json.dumps({"error": "case_id and action are required"}),
+                status_code=400,
+                media_type="application/json",
+            )
+        try:
+            return queue_triage_store.review(case_id=case_id, action=action, comment=comment)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown queue case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.post("/api/queue/explain")
+    async def queue_explain(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            return Response(
+                content=json.dumps({"error": 'Invalid JSON. Send { "case_id": "...", "question": "..." }'}),
+                status_code=400,
+                media_type="application/json",
+            )
+        case_id = payload.get("case_id")
+        question = (payload.get("question") or "").strip()
+        if not case_id or not question:
+            return Response(
+                content=json.dumps({"error": "case_id and question are required"}),
+                status_code=400,
+                media_type="application/json",
+            )
+        try:
+            return queue_triage_store.explain(case_id=case_id, question=question)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown queue case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.get("/api/diagnosis/workspace")
+    async def diagnosis_workspace():
+        return missed_diagnosis_store.snapshot()
+
+    @app.get("/api/diagnosis/cases/{case_id}")
+    async def diagnosis_case(case_id: str):
+        try:
+            return missed_diagnosis_store.get_case(case_id)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown diagnosis case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.post("/api/diagnosis/rerun")
+    async def diagnosis_rerun(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            return Response(
+                content=json.dumps({"error": 'Invalid JSON. Send { "case_id": "..." }'}),
+                status_code=400,
+                media_type="application/json",
+            )
+        case_id = payload.get("case_id")
+        if not case_id:
+            return Response(
+                content=json.dumps({"error": "case_id is required"}),
+                status_code=400,
+                media_type="application/json",
+            )
+        try:
+            return missed_diagnosis_store.rerun(case_id=case_id)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown diagnosis case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.post("/api/diagnosis/review")
+    async def diagnosis_review(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            return Response(
+                content=json.dumps({"error": 'Invalid JSON. Send { "case_id": "...", "action": "...", "comment": "..." }'}),
+                status_code=400,
+                media_type="application/json",
+            )
+        case_id = payload.get("case_id")
+        action = (payload.get("action") or "").strip()
+        comment = (payload.get("comment") or "").strip() or None
+        if not case_id or not action:
+            return Response(
+                content=json.dumps({"error": "case_id and action are required"}),
+                status_code=400,
+                media_type="application/json",
+            )
+        try:
+            return missed_diagnosis_store.review(case_id=case_id, action=action, comment=comment)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown diagnosis case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+
+    @app.post("/api/diagnosis/explain")
+    async def diagnosis_explain(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            return Response(
+                content=json.dumps({"error": 'Invalid JSON. Send { "case_id": "...", "question": "..." }'}),
+                status_code=400,
+                media_type="application/json",
+            )
+        case_id = payload.get("case_id")
+        question = (payload.get("question") or "").strip()
+        if not case_id or not question:
+            return Response(
+                content=json.dumps({"error": "case_id and question are required"}),
+                status_code=400,
+                media_type="application/json",
+            )
+        try:
+            return missed_diagnosis_store.explain(case_id=case_id, question=question)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown diagnosis case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
 
     @app.get("/api/safety/workspace")
     async def safety_workspace():

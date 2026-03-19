@@ -1,0 +1,36 @@
+{
+  "id": "undiagnosed_hypertension_detection",
+  "version": "1.0",
+  "title": "Detect Undiagnosed Hypertension",
+  "family": "missed_diagnosis_detection",
+  "specialties": ["primary_care"],
+  "status": "prototype_ready",
+  "summary": "Review repeated elevated blood pressure evidence and flag likely hypertension that is not documented on the active problem list.",
+  "problem_statement": "Repeated elevated blood pressures may not translate into an active diagnosis or timely follow-up.",
+  "live_test_ready": true,
+  "inputs": [
+    {"name": "vitals_summary", "source": "Vitals trend", "description": "Recent blood pressure measurements and dates."},
+    {"name": "problem_list_summary", "source": "Problem list", "description": "Current diagnosis summary.", "required": false},
+    {"name": "medication_summary", "source": "Medication list", "description": "Current antihypertensive medications, if any.", "required": false}
+  ],
+  "trigger_signals": ["repeated elevated bp", "no hypertension diagnosis"],
+  "evidence_sources": ["vitals", "problem_list", "medications"],
+  "rule_sets": [
+    {"id": "hypertension_gap_detection", "summary": "If multiple elevated blood pressures occur without a matching diagnosis, flag for clinician review."}
+  ],
+  "actions": [
+    {"id": "review_item", "label": "Create diagnosis gap review item", "kind": "create_review_item", "description": "Open a problem-list reconciliation task."},
+    {"id": "followup_plan", "label": "Draft blood pressure follow-up plan", "kind": "draft_followup_plan", "description": "Prepare a confirmation and follow-up recommendation."},
+    {"id": "chart_summary", "label": "Draft concise evidence summary", "kind": "chart_summary", "description": "Summarize the repeated BP evidence."}
+  ],
+  "presentation": {
+    "skill": "clinical_report_presentation",
+    "sections": ["Evidence Summary", "Possible Missed Diagnosis", "Recommended Next Step", "Review Status"]
+  },
+  "examples": [
+    "Does this patient look like undiagnosed hypertension?"
+  ],
+  "family_config": {
+    "elevated_bp_threshold": ">=140/90 on repeated encounters"
+  }
+}

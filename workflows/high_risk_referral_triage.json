@@ -1,0 +1,38 @@
+{
+  "id": "high_risk_referral_triage",
+  "version": "1.0",
+  "title": "Escalate High-Risk Referrals",
+  "family": "queue_triage",
+  "specialties": ["primary_care", "cardiology", "oncology", "pulmonology", "neurology"],
+  "status": "prototype_ready",
+  "summary": "Analyze referral text and urgency markers, then reprioritize high-risk cases for timely review.",
+  "problem_statement": "Referral queues mix urgent and routine cases, delaying care for patients with high-risk signals.",
+  "live_test_ready": true,
+  "inputs": [
+    {"name": "referral_text", "source": "Referral text", "description": "Free-text referral reason and supporting context."},
+    {"name": "queue_context", "source": "Referral queue metadata", "description": "Current queue, due date, and service line metadata.", "required": false}
+  ],
+  "trigger_signals": ["urgent", "high-risk", "worsening", "expedite"],
+  "evidence_sources": ["referral_reason", "queue_priority", "clinical_flags"],
+  "rule_sets": [
+    {"id": "referral_triage", "summary": "If high-risk language or escalation markers are present, route to higher queue priority."}
+  ],
+  "actions": [
+    {"id": "queue_move", "label": "Draft queue reprioritization", "kind": "queue_reprioritization", "description": "Prepare the proposed queue move."},
+    {"id": "review_item", "label": "Create triage review item", "kind": "create_review_item", "description": "Queue the referral for rapid human review."},
+    {"id": "owner_notice", "label": "Draft scheduler alert", "kind": "mock_email", "description": "Prepare a scheduling alert.", "reviewer_required": false}
+  ],
+  "presentation": {
+    "skill": "queue_triage_presenter",
+    "sections": ["Case Signal", "Queue Status", "Recommended Queue Move", "Review Status"],
+    "tone": "compact_case_triage"
+  },
+  "examples": [
+    "This referral mentions rapid worsening symptoms and needs triage.",
+    "Please review whether this referral should move into the urgent triage lane today."
+  ],
+  "family_config": {
+    "priority_terms": ["urgent", "expedite", "rapidly worsening", "high-risk"],
+    "brief_focus": ["signal", "queue move", "owner", "review need"]
+  }
+}

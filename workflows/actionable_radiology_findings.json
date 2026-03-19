@@ -1,0 +1,141 @@
+{
+  "id": "actionable_radiology_findings",
+  "version": "1.0",
+  "title": "Resolve Actionable Radiology Findings",
+  "family": "findings_closure",
+  "specialties": ["radiology", "system_level"],
+  "status": "prototype_ready",
+  "summary": "Parse finalized radiology report text, detect actionable findings, verify closure status, and route the next step.",
+  "problem_statement": "Actionable findings are often mentioned in reports but not consistently closed with outreach, ordering, or scheduling.",
+  "live_test_ready": true,
+  "inputs": [
+    {"name": "report_text", "source": "Radiology report text", "description": "Final report text containing the actionable finding."},
+    {"name": "patient_summary", "source": "Patient context", "description": "Basic patient and encounter context used to anchor the recommendation.", "required": false},
+    {"name": "completion_state", "source": "Workflow state", "description": "Whether a follow-up action has already been completed.", "required": false},
+    {"name": "owner_context", "source": "Responsible owner metadata", "description": "Optional ordering clinician, PCP, radiology navigator, or service owner for the finding.", "required": false},
+    {"name": "notification_log", "source": "Prior outreach evidence", "description": "Optional indication that a clinician, patient, or navigator was already notified.", "required": false}
+  ],
+  "trigger_signals": [
+    "actionable finding",
+    "follow-up recommended",
+    "needs surveillance",
+    "further evaluation recommended",
+    "short-interval follow-up",
+    "dedicated imaging recommended",
+    "biopsy recommended"
+  ],
+  "evidence_sources": ["radiology_report", "problem_list", "follow_up_status"],
+  "rule_sets": [
+    {
+      "id": "radiology_actionable_followup",
+      "summary": "If the report contains actionable language and no closure is recorded, queue review and next-step planning.",
+      "references": [
+        "report impression",
+        "recommendation section",
+        "owner / navigator routing metadata",
+        "documented outreach or order status"
+      ]
+    },
+    {
+      "id": "radiology_urgent_escalation",
+      "summary": "If the report requests same-day, emergent, or immediate follow-up, escalate to urgent review before closure drafting.",
+      "references": [
+        "critical result policy",
+        "same-day escalation phrases",
+        "direct communication / ED escalation language"
+      ]
+    }
+  ],
+  "actions": [
+    {"id": "review_item", "label": "Create review item", "kind": "create_review_item", "description": "Queue a reviewer task for closure verification."},
+    {"id": "followup_plan", "label": "Draft follow-up plan", "kind": "draft_followup_plan", "description": "Prepare a concise follow-up recommendation."},
+    {"id": "order_draft", "label": "Draft diagnostic order suggestion", "kind": "draft_order", "description": "Prepare the likely next diagnostic order or referral suggestion."},
+    {"id": "schedule_draft", "label": "Draft scheduling outreach", "kind": "draft_schedule", "description": "Prepare a scheduling or navigator outreach next step."},
+    {"id": "owner_notice", "label": "Draft owner notification", "kind": "mock_email", "description": "Prepare a clinician-facing alert.", "reviewer_required": false}
+  ],
+  "presentation": {
+    "skill": "findings_brief_presenter",
+    "sections": ["Signal", "Closure Check", "Recommended Next Step", "Review Status"],
+    "tone": "compact_actionable_findings"
+  },
+  "examples": [
+    "The report recommends a dedicated renal mass MRI for further evaluation of an incidental lesion.",
+    "Short-interval CT follow-up in 3 months is advised for a suspicious pulmonary opacity.",
+    "Possible cord compression is described and same-day MRI is recommended.",
+    "Please check whether this radiology report has already been closed."
+  ],
+  "family_config": {
+    "actionable_terms": [
+      "follow-up",
+      "follow up",
+      "recommend",
+      "recommended",
+      "surveillance",
+      "suspicious",
+      "further evaluation",
+      "short-interval follow-up",
+      "short interval follow-up",
+      "dedicated ultrasound",
+      "dedicated mri",
+      "dedicated ct",
+      "repeat ct",
+      "repeat mri",
+      "biopsy",
+      "pet/ct",
+      "diagnostic mammogram",
+      "tissue sampling"
+    ],
+    "urgent_terms": [
+      "critical",
+      "urgent",
+      "immediate",
+      "same day",
+      "same-day",
+      "emergent",
+      "ed evaluation",
+      "cord compression"
+    ],
+    "resolved_states": [
+      "completed",
+      "scheduled",
+      "addressed",
+      "resolved",
+      "patient_notified",
+      "order_placed",
+      "surveillance_enrolled"
+    ],
+    "finding_categories": [
+      "incidental lesion requiring follow-up",
+      "suspicious mass or nodule",
+      "possible malignancy workup",
+      "short-interval surveillance recommendation",
+      "high-acuity radiology escalation"
+    ],
+    "closure_targets": [
+      "documented acknowledgement",
+      "diagnostic order placement",
+      "scheduling / surveillance enrollment",
+      "owner notification"
+    ],
+    "owner_roles": [
+      "ordering clinician",
+      "primary care physician",
+      "specialty service",
+      "results navigator"
+    ],
+    "timeframe_terms": [
+      "same day",
+      "24-48 hours",
+      "short interval",
+      "3 months",
+      "6 months"
+    ],
+    "brief_focus": [
+      "signal",
+      "closure status",
+      "primary next step",
+      "owner",
+      "review need"
+    ]
+  }
+}

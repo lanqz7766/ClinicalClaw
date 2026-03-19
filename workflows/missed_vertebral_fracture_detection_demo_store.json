@@ -1,0 +1,111 @@
+{
+  "workflow_id": "missed_vertebral_fracture_detection",
+  "cases": [
+    {
+      "id": "md_case_001",
+      "workflow_id": "missed_vertebral_fracture_detection",
+      "title": "Thoracic compression fracture mentioned without osteoporosis workup",
+      "submitted_by": "Radiology QA feed",
+      "received_at": "2026-03-18T09:20:00+00:00",
+      "status": "new",
+      "owner": "Primary care triage clinician",
+      "queue": "Missed diagnosis review",
+      "due_at": "2026-03-18T12:00:00+00:00",
+      "patient_label": "Demo Spine A",
+      "service_line": "Radiology",
+      "source_type": "report",
+      "clinical_context": "No DEXA order, no bone health note, and no fracture follow-up in the chart.",
+      "completion_state": "unknown",
+      "report_text": "Mild acute vertebral compression fracture at T8 with height loss. Recommend correlation for osteoporosis.",
+      "followup_summary": "No follow-up order or osteoporosis workup found.",
+      "focus_metric": {
+        "label": "Gap score",
+        "value": 92,
+        "unit": "/100",
+        "delta": "+24 at review",
+        "tone": "urgent"
+      },
+      "trend_points": [
+        {"label": "Initial read", "value": 68},
+        {"label": "QA screen", "value": 80},
+        {"label": "Current", "value": 92}
+      ],
+      "evidence_grid": [
+        {"label": "Fracture signal", "value": "Acute T8 compression fracture"},
+        {"label": "Follow-up", "value": "No osteoporosis workup"},
+        {"label": "Target action", "value": "Open fracture review"},
+        {"label": "Current closure", "value": "Open"}
+      ]
+    },
+    {
+      "id": "md_case_002",
+      "workflow_id": "missed_vertebral_fracture_detection",
+      "title": "Lumbar vertebral fracture already routed to bone health clinic",
+      "submitted_by": "Radiology follow-up registry",
+      "received_at": "2026-03-18T10:55:00+00:00",
+      "status": "new",
+      "owner": "Bone health coordinator",
+      "queue": "Fracture follow-up",
+      "due_at": "2026-03-22T09:00:00+00:00",
+      "patient_label": "Demo Spine B",
+      "service_line": "Primary care",
+      "source_type": "report",
+      "clinical_context": "Referral already sent to the bone health clinic after initial review.",
+      "completion_state": "scheduled",
+      "report_text": "Chronic vertebral fracture deformity at L1. Osteoporosis evaluation has already been scheduled.",
+      "followup_summary": "Bone health clinic visit scheduled next week.",
+      "focus_metric": {
+        "label": "Gap score",
+        "value": 51,
+        "unit": "/100",
+        "delta": "Follow-up scheduled",
+        "tone": "watch"
+      },
+      "trend_points": [
+        {"label": "Initial read", "value": 49},
+        {"label": "Registry check", "value": 51}
+      ],
+      "evidence_grid": [
+        {"label": "Fracture signal", "value": "Chronic L1 deformity"},
+        {"label": "Follow-up", "value": "Scheduled bone health clinic"},
+        {"label": "Target action", "value": "Confirm appointment"},
+        {"label": "Current closure", "value": "Scheduled"}
+      ]
+    },
+    {
+      "id": "md_case_003",
+      "workflow_id": "missed_vertebral_fracture_detection",
+      "title": "Possible vertebral compression fracture with pending review",
+      "submitted_by": "ED report feed",
+      "received_at": "2026-03-18T14:10:00+00:00",
+      "status": "new",
+      "owner": "Hospitalist review nurse",
+      "queue": "Open radiology gaps",
+      "due_at": "2026-03-18T18:00:00+00:00",
+      "patient_label": "Demo Spine C",
+      "service_line": "Emergency medicine",
+      "source_type": "report",
+      "clinical_context": "Back pain was noted, but next-step workup is unclear.",
+      "completion_state": "unknown",
+      "report_text": "Possible vertebral compression fracture. Recommend osteoporosis evaluation.",
+      "followup_summary": "No clear documentation of DEXA, labs, or bone health referral.",
+      "focus_metric": {
+        "label": "Gap score",
+        "value": 78,
+        "unit": "/100",
+        "delta": "+13 at triage",
+        "tone": "alert"
+      },
+      "trend_points": [
+        {"label": "Initial read", "value": 61},
+        {"label": "Triage", "value": 78}
+      ],
+      "evidence_grid": [
+        {"label": "Fracture signal", "value": "Compression fracture language"},
+        {"label": "Follow-up", "value": "No clear workup documented"},
+        {"label": "Target action", "value": "Prompt clinician review"},
+        {"label": "Current closure", "value": "Open"}
+      ]
+    }
+  ]
+}

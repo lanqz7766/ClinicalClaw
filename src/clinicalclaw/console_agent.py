@@ -9,6 +9,9 @@ from clinicalclaw.engine.providers.llm import LLMMessage, LLMProvider
 from clinicalclaw.engine.tools.registry import ToolResult
 from clinicalclaw.console_workspace import WORKFLOWS, rank_workflows, route_general_query
 from clinicalclaw.demo_workspace import demo_workspace_store
+from clinicalclaw.findings_closure import findings_closure_store
+from clinicalclaw.missed_diagnosis import missed_diagnosis_store
+from clinicalclaw.queue_triage import queue_triage_store
 from clinicalclaw.safety_monitor import KNOWLEDGE_BASE, safety_monitor_store
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -51,6 +54,95 @@ class NeuroWorkspaceTool:
                 "risk_level": payload["report"]["risk_level"],
             },
             "timeline": payload["timeline"],
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
+
+
+class FindingsWorkspaceTool:
+    name = "get_findings_workspace"
+    description = "Return the current findings closure workspace, including the lead finding, closure state, and recommended actions."
+    parameters = {
+        "case_id": {
+            "type": "string",
+            "description": "Optional findings case id. Defaults to the main critical-lab demo case.",
+            "required": False,
+        }
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        case_id = args.get("case_id") or findings_closure_store.snapshot()["default_case_id"]
+        payload = findings_closure_store.get_case(case_id)
+        compact = {
+            "id": payload["id"],
+            "title": payload["title"],
+            "workflow_title": payload["workflow_title"],
+            "risk_label": payload["risk_label"],
+            "risk_reason": payload["risk_reason"],
+            "disposition": payload["disposition"],
+            "focus_metric": payload["focus_metric"],
+            "recommended_actions": payload["recommended_actions"],
+            "evidence_grid": payload["evidence_grid"],
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
+
+
+class QueueWorkspaceTool:
+    name = "get_queue_workspace"
+    description = "Return the current queue triage workspace, including urgency signal, queue recommendation, and recommended actions."
+    parameters = {
+        "case_id": {
+            "type": "string",
+            "description": "Optional queue case id. Defaults to the main referral triage demo case.",
+            "required": False,
+        }
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        case_id = args.get("case_id") or queue_triage_store.snapshot()["default_case_id"]
+        payload = queue_triage_store.get_case(case_id)
+        compact = {
+            "id": payload["id"],
+            "title": payload["title"],
+            "workflow_title": payload["workflow_title"],
+            "risk_label": payload["risk_label"],
+            "risk_reason": payload["risk_reason"],
+            "disposition": payload["disposition"],
+            "queue_recommendation": payload["queue_recommendation"],
+            "focus_metric": payload["focus_metric"],
+            "recommended_actions": payload["recommended_actions"],
+            "evidence_grid": payload["evidence_grid"],
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
+
+
+class DiagnosisWorkspaceTool:
+    name = "get_diagnosis_workspace"
+    description = "Return the current missed diagnosis workspace, including the gap signal, review recommendation, and key evidence."
+    parameters = {
+        "case_id": {
+            "type": "string",
+            "description": "Optional diagnosis case id. Defaults to the main missed vertebral fracture demo case.",
+            "required": False,
+        }
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        case_id = args.get("case_id") or missed_diagnosis_store.snapshot()["default_case_id"]
+        payload = missed_diagnosis_store.get_case(case_id)
+        compact = {
+            "id": payload["id"],
+            "title": payload["title"],
+            "workflow_title": payload["workflow_title"],
+            "risk_label": payload["risk_label"],
+            "risk_reason": payload["risk_reason"],
+            "disposition": payload["disposition"],
+            "gap_recommendation": payload["gap_recommendation"],
+            "focus_metric": payload["focus_metric"],
+            "recommended_actions": payload["recommended_actions"],
+            "evidence_grid": payload["evidence_grid"],
         }
         return ToolResult(success=True, output=json.dumps(compact, indent=2))
 
@@ -170,7 +262,7 @@ async def route_with_llm(llm: LLMProvider, message: str) -> dict[str, Any]:
     system_prompt = (
         "You are the ClinicalClaw router. "
         "Classify the user's request into one workflow_id from "
-        "general_chat, neuro_longitudinal, radiation_safety_monitor. "
+        "general_chat, findings_closure, queue_triage, missed_diagnosis_detection, neuro_longitudinal, radiation_safety_monitor. "
         "Return strict JSON with keys: workflow_id, confidence, reason, next_action, alternatives. "
         "alternatives must be an array of 0-2 workflow_id values that are also plausible. "
         "If uncertain, choose general_chat."
@@ -180,6 +272,9 @@ async def route_with_llm(llm: LLMProvider, message: str) -> dict[str, Any]:
         f"{message}\n\n"
         "Workflow boundaries:\n"
         "- neuro_longitudinal: MRI, hippocampus, atrophy, trend, longitudinal imaging report\n"
+        "- findings_closure: critical lab, positive result follow-up, actionable report finding, abnormal pap, suspicious nodule\n"
+        "- queue_triage: referral urgency, queue reprioritization, post-discharge follow-up triage, same-day review, outreach queue\n"
+        "- missed_diagnosis_detection: missed fracture workup, vertebral fracture gap, unrecognized condition, undiagnosed condition\n"
         "- radiation_safety_monitor: incident, QA, alert, radiation, dosimetry, timeout, adaptive planning\n"
         "- general_chat: anything else or uncertain\n"
     )
@@ -193,12 +288,18 @@ async def route_with_llm(llm: LLMProvider, message: str) -> dict[str, Any]:
         parsed = _extract_json(response.content)
         if parsed and parsed.get("workflow_id") in {
             "general_chat",
+            "findings_closure",
+            "queue_triage",
+            "missed_diagnosis_detection",
             "neuro_longitudinal",
             "radiation_safety_monitor",
         }:
             workflow_id = parsed["workflow_id"]
             module_map = {
                 "general_chat": "home",
+                "findings_closure": "findings",
+                "queue_triage": "queue",
+                "missed_diagnosis_detection": "diagnosis",
                 "neuro_longitudinal": "neuro",
                 "radiation_safety_monitor": "safety",
             }
@@ -211,7 +312,7 @@ async def route_with_llm(llm: LLMProvider, message: str) -> dict[str, Any]:
             parsed_alternatives = parsed.get("alternatives") or []
             alternatives = []
             for alt in parsed_alternatives:
-                if alt in {"general_chat", "neuro_longitudinal", "radiation_safety_monitor"} and alt != workflow_id:
+                if alt in {"general_chat", "findings_closure", "queue_triage", "missed_diagnosis_detection", "neuro_longitudinal", "radiation_safety_monitor"} and alt != workflow_id:
                     alt_wf = next(item for item in WORKFLOWS if item["id"] == alt)
                     alternatives.append({"module": alt_wf["module"], "title": alt_wf["title"]})
             if not alternatives:
@@ -255,6 +356,9 @@ async def route_with_llm(llm: LLMProvider, message: str) -> dict[str, Any]:
 def build_console_agent(llm: LLMProvider):
     tools = [
         WorkflowCatalogTool(),
+        FindingsWorkspaceTool(),
+        QueueWorkspaceTool(),
+        DiagnosisWorkspaceTool(),
         NeuroWorkspaceTool(),
         SafetyQueueTool(),
         SafetyCaseTool(),
@@ -267,10 +371,16 @@ def build_console_agent(llm: LLMProvider):
         "Before producing any user-facing report, summary, or polished chat answer, you must first call "
         "use_skill for the required presentation skill or skills. "
         "Always load clinical_report_presentation first. "
+        "If the workflow is findings_closure, also load findings_brief_presenter. "
+        "If the workflow is queue_triage, also load queue_triage_presenter. "
+        "If the workflow is missed_diagnosis_detection, also load missed_diagnosis_presenter. "
         "If the workflow is neuro_longitudinal, also load neuro_report_presenter. "
         "If the workflow is radiation_safety_monitor, also load safety_brief_presenter. "
         "Silently organize your facts before writing, but never reveal hidden planning or chain-of-thought. "
         "For neuro requests, inspect the neuro workspace before answering. "
+        "For findings-closure requests, inspect the findings workspace before answering. "
+        "For queue triage requests, inspect the queue workspace before answering. "
+        "For missed diagnosis requests, inspect the diagnosis workspace before answering. "
         "For safety requests, inspect the safety queue or a safety case before answering. "
         "Do not invent patient data or incident details. "
         "Do not expose internal tool names or routing details in the final answer. "
@@ -290,6 +400,9 @@ def build_console_agent(llm: LLMProvider):
         "list_skills",
         "use_skill",
         "workflow_catalog",
+        "get_findings_workspace",
+        "get_queue_workspace",
+        "get_diagnosis_workspace",
         "get_neuro_workspace",
         "get_safety_queue",
         "get_safety_case",
@@ -300,6 +413,39 @@ def build_console_agent(llm: LLMProvider):
 
 def build_routed_task(route: dict[str, Any], message: str) -> str:
     workflow_id = route["workflow_id"]
+    if workflow_id == "findings_closure":
+        return (
+            "Workflow: findings_closure\n"
+            "Required pre-answer tool calls:\n"
+            "1. use_skill(name='clinical_report_presentation')\n"
+            "2. use_skill(name='findings_brief_presenter')\n"
+            "Use the findings workspace tool to inspect the current case before answering.\n"
+            "Present the final answer as a polished findings closure brief with sections for Finding Summary, "
+            "Closure Check, Recommended Next Step, and Review Status.\n"
+            f"User request: {message}"
+        )
+    if workflow_id == "queue_triage":
+        return (
+            "Workflow: queue_triage\n"
+            "Required pre-answer tool calls:\n"
+            "1. use_skill(name='clinical_report_presentation')\n"
+            "2. use_skill(name='queue_triage_presenter')\n"
+            "Use the queue workspace tool to inspect the current case before answering.\n"
+            "Present the final answer as a compact triage brief with sections for Queue Signal, Priority Shift, "
+            "Recommended Queue Move, and Review Status.\n"
+            f"User request: {message}"
+        )
+    if workflow_id == "missed_diagnosis_detection":
+        return (
+            "Workflow: missed_diagnosis_detection\n"
+            "Required pre-answer tool calls:\n"
+            "1. use_skill(name='clinical_report_presentation')\n"
+            "2. use_skill(name='missed_diagnosis_presenter')\n"
+            "Use the diagnosis workspace tool to inspect the current case before answering.\n"
+            "Present the final answer as a compact missed-diagnosis brief with sections for Gap Signal, "
+            "Follow-up Check, Recommended Workup, and Review Status.\n"
+            f"User request: {message}"
+        )
     if workflow_id == "neuro_longitudinal":
         return (
             "Workflow: neuro_longitudinal\n"

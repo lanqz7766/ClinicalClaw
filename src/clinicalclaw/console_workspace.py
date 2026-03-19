@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from clinicalclaw.demo_workspace import demo_workspace_store
+from clinicalclaw.findings_closure import findings_closure_store
+from clinicalclaw.missed_diagnosis import missed_diagnosis_store
+from clinicalclaw.queue_triage import queue_triage_store
 from clinicalclaw.safety_monitor import safety_monitor_store
 
 
@@ -11,7 +14,6 @@ WORKFLOWS = [
         "id": "general_chat",
         "title": "General Clinical Command",
         "module": "home",
-        "status": "ready",
         "summary": "Natural-language intake that routes requests into the most relevant ClinicalClaw workflow.",
         "tools": ["workflow_router", "policy_guard", "tool_selector"],
         "tags": ["chat", "routing", "agent-entry"],
@@ -21,10 +23,45 @@ WORKFLOWS = [
         ],
     },
     {
+        "id": "findings_closure",
+        "title": "Findings Closure",
+        "module": "findings",
+        "summary": "Actionable findings follow-up across labs, reports, and screening closure workflows.",
+        "tools": ["finding_parser", "closure_checker", "action_recommender", "review_router"],
+        "tags": ["findings", "follow-up", "lab", "report", "closure"],
+        "examples": [
+            "Does this critical lab need urgent escalation?",
+            "Check whether this positive result still needs follow-up.",
+        ],
+    },
+    {
+        "id": "queue_triage",
+        "title": "Queue Triage",
+        "module": "queue",
+        "summary": "Reprioritize high-risk referrals and follow-up queues with compact review-first triage logic.",
+        "tools": ["queue_reader", "priority_scorer", "review_router", "action_recommender"],
+        "tags": ["queue", "referral", "triage", "follow-up"],
+        "examples": [
+            "Should this referral move to an urgent queue?",
+            "Review this post-discharge case and suggest the next triage step.",
+        ],
+    },
+    {
+        "id": "missed_diagnosis_detection",
+        "title": "Missed Diagnosis Review",
+        "module": "diagnosis",
+        "summary": "Detect likely diagnosis gaps from reports and chart follow-up signals, then prepare review-first workup guidance.",
+        "tools": ["gap_reader", "evidence_bundle", "workup_recommender", "review_router"],
+        "tags": ["diagnosis-gap", "fracture", "chart-review", "follow-up"],
+        "examples": [
+            "Does this report suggest a missed vertebral fracture workup gap?",
+            "Review this case for a likely missed diagnosis and summarize the next step.",
+        ],
+    },
+    {
         "id": "neuro_longitudinal",
         "title": "Neuro Longitudinal Review",
         "module": "neuro",
-        "status": "prototype-ready",
         "summary": "Longitudinal MRI review for hippocampal atrophy trend analysis, report generation, and review.",
         "tools": ["ehr_timeline_loader", "mri_series_selector", "volume_trend_analyzer", "report_generator"],
         "tags": ["brain", "mri", "atrophy", "report"],
@@ -37,7 +74,6 @@ WORKFLOWS = [
         "id": "radiation_safety_monitor",
         "title": "Radiation Safety Monitor",
         "module": "safety",
-        "status": "prototype-ready",
         "summary": "Case-based failure pattern matching with watch/alert/urgent triage and mitigation playbooks.",
         "tools": ["case_parser", "failure_pattern_matcher", "risk_tier_engine", "mock_email_router"],
         "tags": ["qa", "radiation-oncology", "incident", "alert"],
@@ -50,6 +86,46 @@ WORKFLOWS = [
 
 
 ROUTING_KEYWORDS = {
+    "findings": {
+        "critical",
+        "lab",
+        "positive fit",
+        "follow-up",
+        "follow up",
+        "result",
+        "finding",
+        "abnormal pap",
+        "nodule",
+        "colonoscopy",
+        "potassium",
+    },
+    "queue": {
+        "referral",
+        "queue",
+        "triage",
+        "high-risk",
+        "high risk",
+        "post-discharge",
+        "post discharge",
+        "expedite",
+        "same-day",
+        "same day",
+        "follow-up window",
+        "follow up window",
+        "outreach",
+    },
+    "diagnosis": {
+        "missed diagnosis",
+        "missed fracture",
+        "vertebral",
+        "compression fracture",
+        "osteoporosis",
+        "gap",
+        "unrecognized",
+        "undiagnosed",
+        "atrial fibrillation",
+        "hypertension",
+    },
     "neuro": {"mri", "brain", "hippocampus", "atrophy", "neuro", "longitudinal", "report", "volume", "trend"},
     "safety": {
         "incident",
@@ -72,11 +148,15 @@ ROUTING_KEYWORDS = {
 def console_snapshot() -> dict[str, Any]:
     neuro = demo_workspace_store.snapshot()
     safety = safety_monitor_store.snapshot()
+    findings = findings_closure_store.snapshot()
+    queue = queue_triage_store.snapshot()
+    diagnosis = missed_diagnosis_store.snapshot()
     return {
         "title": "ClinicalClaw Console",
         "tagline": "General clinical command center with workflow-specific modules.",
         "quick_prompts": [
             "Review this MRI trend and draft a physician summary.",
+            "Should this referral move into an urgent queue today?",
             "Check whether this radiotherapy case resembles a known failure pattern.",
             "Route my request to the right workflow and show the next actions.",
         ],
@@ -84,11 +164,23 @@ def console_snapshot() -> dict[str, Any]:
         "highlights": [
             {
                 "label": "Available modules",
-                "value": "2 scenario workspaces",
+                "value": "3 workflow workspaces",
             },
             {
                 "label": "Active safety queue",
                 "value": f"{len(safety['cases'])} incoming cases",
+            },
+            {
+                "label": "Open findings queue",
+                "value": f"{len(findings['cases'])} actionable cases",
+            },
+            {
+                "label": "Queue triage lane",
+                "value": f"{len(queue['cases'])} triage cases",
+            },
+            {
+                "label": "Diagnosis gap review",
+                "value": f"{len(diagnosis['cases'])} review cases",
             },
             {
                 "label": "Neuro report state",
@@ -102,6 +194,24 @@ def console_snapshot() -> dict[str, Any]:
                 "risk": neuro["workspace"]["analysis"]["risk_level"],
                 "default_case_id": neuro["default_case_id"],
             },
+            "findings": {
+                "title": findings["workspace"]["title"],
+                "summary": findings["workspace"]["risk_reason"],
+                "risk": findings["workspace"]["risk_label"],
+                "default_case_id": findings["default_case_id"],
+            },
+            "queue": {
+                "title": queue["workspace"]["title"],
+                "summary": queue["workspace"]["risk_reason"],
+                "risk": queue["workspace"]["risk_label"],
+                "default_case_id": queue["default_case_id"],
+            },
+            "diagnosis": {
+                "title": diagnosis["workspace"]["title"],
+                "summary": diagnosis["workspace"]["risk_reason"],
+                "risk": diagnosis["workspace"]["risk_label"],
+                "default_case_id": diagnosis["default_case_id"],
+            },
             "safety": {
                 "title": safety["workspace"]["title"],
                 "summary": safety["workspace"]["risk_reason"],
@@ -114,9 +224,27 @@ def console_snapshot() -> dict[str, Any]:
 
 def rank_workflows(message: str) -> list[dict[str, Any]]:
     lowered = message.lower()
+    findings_score = sum(1 for token in ROUTING_KEYWORDS["findings"] if token in lowered)
+    queue_score = sum(1 for token in ROUTING_KEYWORDS["queue"] if token in lowered)
+    diagnosis_score = sum(1 for token in ROUTING_KEYWORDS["diagnosis"] if token in lowered)
     neuro_score = sum(1 for token in ROUTING_KEYWORDS["neuro"] if token in lowered)
     safety_score = sum(1 for token in ROUTING_KEYWORDS["safety"] if token in lowered)
     ranked = [
+        {
+            "module": "findings",
+            "workflow": next(item for item in WORKFLOWS if item["module"] == "findings"),
+            "score": findings_score,
+        },
+        {
+            "module": "queue",
+            "workflow": next(item for item in WORKFLOWS if item["module"] == "queue"),
+            "score": queue_score,
+        },
+        {
+            "module": "diagnosis",
+            "workflow": next(item for item in WORKFLOWS if item["module"] == "diagnosis"),
+            "score": diagnosis_score,
+        },
         {
             "module": "neuro",
             "workflow": next(item for item in WORKFLOWS if item["module"] == "neuro"),
@@ -140,8 +268,62 @@ def route_general_query(message: str) -> dict[str, Any]:
         for item in ranked
         if item["score"] > 0
     ]
+    findings_score = next(item["score"] for item in ranked if item["module"] == "findings")
+    queue_score = next(item["score"] for item in ranked if item["module"] == "queue")
+    diagnosis_score = next(item["score"] for item in ranked if item["module"] == "diagnosis")
     neuro_score = next(item["score"] for item in ranked if item["module"] == "neuro")
     safety_score = next(item["score"] for item in ranked if item["module"] == "safety")
+
+    if findings_score >= queue_score and findings_score >= diagnosis_score and findings_score >= neuro_score and findings_score >= safety_score and findings_score > 0:
+        workflow = best["workflow"]
+        return {
+            "assistant": {
+                "content": (
+                    "I routed this request to Findings Closure. The next step is to inspect the incoming finding, "
+                    "check whether follow-up is already closed, and prepare the safest next action for review."
+                )
+            },
+            "workflow": workflow,
+            "target_module": "findings",
+            "target_view": "findings",
+            "suggested_steps": workflow["tools"],
+            "alternatives": alternatives,
+            "confidence": min(0.55 + findings_score * 0.12, 0.9),
+        }
+
+    if queue_score >= diagnosis_score and queue_score >= neuro_score and queue_score >= safety_score and queue_score > 0:
+        workflow = best["workflow"]
+        return {
+            "assistant": {
+                "content": (
+                    "I routed this request to Queue Triage. The next step is to inspect the queue item, "
+                    "score urgency, and prepare the safest queue move for review."
+                )
+            },
+            "workflow": workflow,
+            "target_module": "queue",
+            "target_view": "queue",
+            "suggested_steps": workflow["tools"],
+            "alternatives": alternatives,
+            "confidence": min(0.55 + queue_score * 0.12, 0.9),
+        }
+
+    if diagnosis_score >= neuro_score and diagnosis_score >= safety_score and diagnosis_score > 0:
+        workflow = best["workflow"]
+        return {
+            "assistant": {
+                "content": (
+                    "I routed this request to Missed Diagnosis Review. The next step is to inspect the signal, "
+                    "check whether follow-up is already documented, and prepare a review-first workup recommendation."
+                )
+            },
+            "workflow": workflow,
+            "target_module": "diagnosis",
+            "target_view": "diagnosis",
+            "suggested_steps": workflow["tools"],
+            "alternatives": alternatives,
+            "confidence": min(0.55 + diagnosis_score * 0.12, 0.9),
+        }
 
     if neuro_score > safety_score and neuro_score > 0:
         workflow = best["workflow"]
@@ -181,8 +363,10 @@ def route_general_query(message: str) -> dict[str, Any]:
     return {
         "assistant": {
             "content": (
-                "I can route requests into either workflow-specific module. Try a neuro question about longitudinal MRI "
-                "change, or a safety question about incident patterns, alerting, or mitigation."
+                "I can route requests into workflow-specific modules. Try a findings question about critical results or "
+                "follow-up closure, a queue question about referrals or post-discharge follow-up, a diagnosis-gap question "
+                "about missed fractures or unrecognized conditions, a neuro question about longitudinal MRI change, or a "
+                "safety question about incident patterns."
             )
         },
         "workflow": workflow,

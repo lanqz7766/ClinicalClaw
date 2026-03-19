@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClinicalClaw Findings Closure</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/findings-assets/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="case-rail">
+        <div class="brand-card">
+          <p class="eyebrow">ClinicalClaw</p>
+          <h1>Findings Closure</h1>
+          <p>Focused workspace for actionable findings that still need follow-up.</p>
+        </div>
+
+        <article class="card current-case-card">
+          <div class="panel-heading compact">
+            <div>
+              <p class="section-label">Current case</p>
+              <h3 id="rail-case-title">Loading case...</h3>
+            </div>
+            <span id="rail-risk-badge" class="risk-badge">Alert</span>
+          </div>
+          <p id="rail-case-subtitle" class="support-copy small-copy"></p>
+          <label class="small-label" for="case-select">Switch case</label>
+          <select id="case-select" class="case-select" aria-label="Select a findings case"></select>
+          <div class="rail-meta" id="rail-meta"></div>
+        </article>
+
+        <div class="rail-summary" id="queue-summary"></div>
+
+        <article class="card explain-card">
+          <div class="panel-heading compact">
+            <div>
+              <p class="section-label">Explain</p>
+              <h3>Quick note</h3>
+            </div>
+          </div>
+          <p id="rail-explain" class="support-copy small-copy">
+            The workspace highlights the highest-signal finding, evidence, and next action.
+          </p>
+        </article>
+      </aside>
+
+      <main class="workspace">
+        <header class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Workflow Demo</p>
+            <h2 id="case-title">Loading case...</h2>
+            <p id="case-subtitle" class="support-copy"></p>
+            <div class="meta-row" id="case-meta"></div>
+          </div>
+          <div class="hero-side">
+            <div class="hero-signal">
+              <div class="signal-score" id="signal-score">72</div>
+              <div class="signal-copy">
+                <span id="risk-badge" class="risk-badge">Alert</span>
+                <span id="workflow-chip" class="meta-chip">Workflow</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <section class="top-grid">
+          <article class="card metric-card">
+            <p class="section-label">Focus signal</p>
+            <div class="signal-wrap">
+              <div>
+                <span id="focus-label" class="small-label">Potassium</span>
+                <div class="signal-value-row">
+                  <strong id="focus-value">6.4</strong>
+                  <span id="focus-unit">mmol/L</span>
+                </div>
+                <p id="focus-delta" class="support-copy"></p>
+              </div>
+              <div class="signal-tone" id="signal-tone"></div>
+            </div>
+          </article>
+
+          <article class="card">
+            <p class="section-label">At a glance</p>
+            <div class="summary-cards" id="summary-cards"></div>
+          </article>
+        </section>
+
+        <nav class="view-nav" aria-label="Findings views">
+          <button class="view-tab active" data-view-tab="overview" type="button">Overview</button>
+          <button class="view-tab" data-view-tab="actions" type="button">Actions</button>
+          <button class="view-tab" data-view-tab="review" type="button">Review</button>
+        </nav>
+
+        <section class="view-panel active" data-view-panel="overview">
+          <div class="overview-grid">
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Trend</p>
+                  <h3>Signal trajectory</h3>
+                </div>
+              </div>
+              <div class="sparkline-wrap">
+                <svg id="trend-chart" viewBox="0 0 360 160" preserveAspectRatio="none"></svg>
+              </div>
+              <div id="trend-legend" class="trend-legend"></div>
+            </article>
+
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Closure</p>
+                  <h3>Status path</h3>
+                </div>
+              </div>
+              <div id="status-steps" class="status-steps"></div>
+              <div class="reason-card" id="reason-card"></div>
+            </article>
+          </div>
+
+          <div class="overview-grid compact-grid">
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Evidence</p>
+                  <h3>Key evidence</h3>
+                </div>
+              </div>
+              <div id="evidence-grid" class="evidence-grid"></div>
+            </article>
+
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Timeline</p>
+                  <h3>Case progression</h3>
+                </div>
+              </div>
+              <div id="timeline-list" class="timeline-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view-panel" data-view-panel="actions">
+          <div class="overview-grid">
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Recommended actions</p>
+                  <h3>Playbook</h3>
+                </div>
+              </div>
+              <div id="action-list" class="action-list"></div>
+              <div class="action-row">
+                <button id="rerun-button" class="ghost-button" type="button">Rerun evaluation</button>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Escalation</p>
+                  <h3>Email preview</h3>
+                </div>
+              </div>
+              <div id="email-card" class="email-card"></div>
+            </article>
+          </div>
+
+          <article class="card chat-card compact-chat-card">
+            <div class="panel-heading">
+              <div>
+                <p class="section-label">Command</p>
+                <h3>Ask the workflow</h3>
+              </div>
+            </div>
+            <div class="prompt-row">
+              <button class="prompt-chip" data-question="Why was this case flagged?">Why flagged?</button>
+              <button class="prompt-chip" data-question="Would this trigger an email alert?">Email alert?</button>
+              <button class="prompt-chip" data-question="What should happen next?">Next step</button>
+            </div>
+            <div id="chat-log" class="chat-log"></div>
+            <form id="question-form" class="question-form">
+              <textarea id="question-input" rows="2" placeholder="Ask for a concise explanation."></textarea>
+              <div class="action-row">
+                <button class="primary-button" type="submit">Ask</button>
+              </div>
+            </form>
+          </article>
+        </section>
+
+        <section class="view-panel" data-view-panel="review">
+          <div class="overview-grid">
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Reviewer</p>
+                  <h3>Reviewer actions</h3>
+                </div>
+              </div>
+              <textarea id="review-comment" rows="4" placeholder="Add reviewer context"></textarea>
+              <div class="action-row">
+                <button class="ghost-button" data-review-action="acknowledged" type="button">Acknowledge</button>
+                <button class="ghost-button" data-review-action="approve" type="button">Approve</button>
+                <button class="primary-button danger" data-review-action="reject" type="button">Reject</button>
+              </div>
+              <div id="review-history" class="review-history"></div>
+            </article>
+
+            <article class="card">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-label">Trace</p>
+                  <h3>Recent audit</h3>
+                </div>
+              </div>
+              <div id="audit-list" class="audit-list"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/findings-assets/app.js" defer></script>
+  </body>
+</html>

@@ -3,6 +3,24 @@ const state = {
   neuroView: "command",
   safetyView: "overview",
   console: null,
+  findings: {
+    caseId: null,
+    cases: [],
+    queueSummary: null,
+    workspace: null,
+  },
+  queue: {
+    caseId: null,
+    cases: [],
+    queueSummary: null,
+    workspace: null,
+  },
+  diagnosis: {
+    caseId: null,
+    cases: [],
+    queueSummary: null,
+    workspace: null,
+  },
   neuro: {
     caseId: null,
     cases: [],
@@ -168,12 +186,13 @@ function renderMarkdownLite(value) {
 
 function setPage(page) {
   state.page = page;
-  document.querySelectorAll("[data-page]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.page === page);
-  });
   document.querySelectorAll("[data-page-panel]").forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.pagePanel === page);
   });
+  const workflowMenu = document.querySelector(".workflow-menu");
+  if (workflowMenu) {
+    workflowMenu.removeAttribute("open");
+  }
   if (page === "home" && state.console) {
     document.getElementById("page-subtitle").textContent = state.console.tagline;
   }
@@ -198,6 +217,16 @@ function renderConsole(consolePayload) {
     .map((item) => `<button class="prompt-chip home-prompt" data-prompt="${item}">${item}</button>`)
     .join("");
   document.getElementById("page-subtitle").textContent = consolePayload.tagline;
+  const workflowMenuItems = consolePayload.workflows
+    .map(
+      (item) => `
+        <button class="workflow-menu-item module-open" data-open-module="${item.module}" type="button" role="menuitem">
+          ${item.title}
+        </button>
+      `,
+    )
+    .join("");
+  document.getElementById("workflow-menu-list").innerHTML = workflowMenuItems;
   const workflowCards = consolePayload.workflows
     .filter((item) => item.module !== "home")
     .map(
@@ -206,11 +235,8 @@ function renderConsole(consolePayload) {
           <p class="section-label">${titleCase(item.module)}</p>
           <h3>${item.title}</h3>
           <p class="support-copy">${item.summary}</p>
-          <div class="workflow-tools">
-            ${item.tools.map((tool) => `<span class="tag-pill">${tool}</span>`).join("")}
-          </div>
+          <div class="workflow-example">${item.examples[0] || item.summary}</div>
           <div class="actions-row">
-            <span class="meta-muted">${item.status}</span>
             <button class="ghost-button module-open" data-open-module="${item.module}" type="button">Open</button>
           </div>
         </article>
@@ -247,6 +273,15 @@ function summarizeToolCall(name = "", route = {}) {
   if (toolName.includes("catalog") || toolName.includes("workflow")) {
     return "Reviewing the available workflows.";
   }
+  if (toolName.includes("finding")) {
+    return "Reviewing the relevant findings-closure context.";
+  }
+  if (toolName.includes("queue")) {
+    return "Reviewing the relevant queue triage context.";
+  }
+  if (toolName.includes("diagnosis")) {
+    return "Reviewing the relevant missed-diagnosis context.";
+  }
   if (toolName.includes("knowledge") || toolName.includes("search")) {
     return "Checking prior safety patterns and reference signals.";
   }
@@ -258,6 +293,15 @@ function summarizeToolCall(name = "", route = {}) {
   }
   if (workflowId === "radiation_safety_monitor" || targetModule === "safety") {
     return "Reviewing the relevant safety case context.";
+  }
+  if (workflowId === "findings_closure" || targetModule === "findings") {
+    return "Reviewing the relevant findings-closure context.";
+  }
+  if (workflowId === "queue_triage" || targetModule === "queue") {
+    return "Reviewing the relevant queue triage context.";
+  }
+  if (workflowId === "missed_diagnosis_detection" || targetModule === "diagnosis") {
+    return "Reviewing the relevant missed-diagnosis context.";
   }
   if (workflowId === "neuro_longitudinal" || targetModule === "neuro") {
     return "Reviewing the longitudinal imaging context.";
@@ -336,6 +380,215 @@ function renderNeuroCaseList() {
               <span>${item.risk_level}</span>
             </div>
           </button>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderFindingsCaseList() {
+  const container = document.getElementById("findings-case-list");
+  container.innerHTML = state.findings.cases
+    .map(
+      (item) => `
+        <div class="case-item${item.id === state.findings.caseId ? " active" : ""}">
+          <button type="button" data-findings-case-id="${item.id}">
+            <div class="meta-row">
+              <strong>${item.title}</strong>
+              <span>${item.risk_label}</span>
+            </div>
+            <p>${item.workflow_title}</p>
+            <div class="meta-row">
+              <span>${item.queue}</span>
+              <span>${formatDate(item.due_at)}</span>
+            </div>
+          </button>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderFindingsWorkspace(workspace) {
+  state.findings.workspace = workspace;
+  renderFindingsCaseList();
+  document.getElementById("findings-title").textContent = workspace.title;
+  document.getElementById("findings-summary").textContent = workspace.risk_reason;
+  document.getElementById("findings-meta").innerHTML = `
+    <span>${workspace.patient_label}</span>
+    <span>${workspace.service_line}</span>
+    <span>${workspace.queue}</span>
+  `;
+  document.getElementById("findings-risk-badge").textContent = workspace.risk_label;
+  document.getElementById("findings-risk-badge").className = `risk-badge ${workspace.risk_tier}`;
+  document.getElementById("findings-summary-cards").innerHTML = workspace.summary_cards
+    .map(
+      (item) => `
+        <article class="summary-card">
+          <span>${item.label}</span>
+          <strong>${item.label === "Due" ? formatTimestamp(item.value) : item.value}</strong>
+        </article>
+      `,
+    )
+    .join("");
+  document.getElementById("findings-focus").textContent = `${workspace.focus_metric.label}: ${workspace.focus_metric.value} ${workspace.focus_metric.unit} · ${workspace.focus_metric.delta}`;
+  document.getElementById("findings-actions").innerHTML = workspace.recommended_actions
+    .map(
+      (item) => `
+        <article class="report-block">
+          <h4>${item}</h4>
+          <p>${workspace.workflow_title}</p>
+        </article>
+      `,
+    )
+    .join("");
+  document.getElementById("findings-rationale").textContent = workspace.rationale[0];
+  document.getElementById("findings-evidence").innerHTML = workspace.evidence_grid
+    .map(
+      (item) => `
+        <div class="field-chip">
+          <span>${item.label}</span>
+          <strong>${item.value}</strong>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderQueueCaseList() {
+  const container = document.getElementById("queue-case-list");
+  container.innerHTML = state.queue.cases
+    .map(
+      (item) => `
+        <div class="case-item${item.id === state.queue.caseId ? " active" : ""}">
+          <button type="button" data-queue-case-id="${item.id}">
+            <div class="meta-row">
+              <strong>${item.title}</strong>
+              <span>${item.risk_label}</span>
+            </div>
+            <p>${item.workflow_title}</p>
+            <div class="meta-row">
+              <span>${item.queue}</span>
+              <span>${formatDate(item.due_at)}</span>
+            </div>
+          </button>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderQueueWorkspace(workspace) {
+  state.queue.workspace = workspace;
+  renderQueueCaseList();
+  document.getElementById("queue-title").textContent = workspace.title;
+  document.getElementById("queue-subtitle").textContent = workspace.risk_reason;
+  document.getElementById("queue-meta").innerHTML = `
+    <span>${workspace.patient_label}</span>
+    <span>${workspace.service_line}</span>
+    <span>${workspace.queue}</span>
+  `;
+  document.getElementById("queue-risk-badge").textContent = workspace.risk_label;
+  document.getElementById("queue-risk-badge").className = `risk-badge ${workspace.risk_tier}`;
+  document.getElementById("queue-summary-cards").innerHTML = workspace.summary_cards
+    .map(
+      (item) => `
+        <article class="summary-card">
+          <span>${item.label}</span>
+          <strong>${item.label === "Due" ? formatTimestamp(item.value) : item.value}</strong>
+        </article>
+      `,
+    )
+    .join("");
+  document.getElementById("queue-focus").textContent =
+    `${workspace.focus_metric.label}: ${workspace.focus_metric.value} ${workspace.focus_metric.unit} · ${workspace.focus_metric.delta}`;
+  document.getElementById("queue-actions").innerHTML = workspace.recommended_actions
+    .map(
+      (item) => `
+        <article class="report-block">
+          <h4>${item}</h4>
+          <p>${workspace.workflow_title}</p>
+        </article>
+      `,
+    )
+    .join("");
+  document.getElementById("queue-rationale").textContent = workspace.queue_recommendation || workspace.rationale[0];
+  document.getElementById("queue-evidence").innerHTML = workspace.evidence_grid
+    .map(
+      (item) => `
+        <div class="field-chip">
+          <span>${item.label}</span>
+          <strong>${item.value}</strong>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderDiagnosisCaseList() {
+  const container = document.getElementById("diagnosis-case-list");
+  container.innerHTML = state.diagnosis.cases
+    .map(
+      (item) => `
+        <div class="case-item${item.id === state.diagnosis.caseId ? " active" : ""}">
+          <button type="button" data-diagnosis-case-id="${item.id}">
+            <div class="meta-row">
+              <strong>${item.title}</strong>
+              <span>${item.risk_label}</span>
+            </div>
+            <p>${item.workflow_title}</p>
+            <div class="meta-row">
+              <span>${item.queue}</span>
+              <span>${formatDate(item.due_at)}</span>
+            </div>
+          </button>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderDiagnosisWorkspace(workspace) {
+  state.diagnosis.workspace = workspace;
+  renderDiagnosisCaseList();
+  document.getElementById("diagnosis-title").textContent = workspace.title;
+  document.getElementById("diagnosis-subtitle").textContent = workspace.risk_reason;
+  document.getElementById("diagnosis-meta").innerHTML = `
+    <span>${workspace.patient_label}</span>
+    <span>${workspace.service_line}</span>
+    <span>${workspace.queue}</span>
+  `;
+  document.getElementById("diagnosis-risk-badge").textContent = workspace.risk_label;
+  document.getElementById("diagnosis-risk-badge").className = `risk-badge ${workspace.risk_tier}`;
+  document.getElementById("diagnosis-summary-cards").innerHTML = workspace.summary_cards
+    .map(
+      (item) => `
+        <article class="summary-card">
+          <span>${item.label}</span>
+          <strong>${item.label === "Due" ? formatTimestamp(item.value) : item.value}</strong>
+        </article>
+      `,
+    )
+    .join("");
+  document.getElementById("diagnosis-focus").textContent =
+    `${workspace.focus_metric.label}: ${workspace.focus_metric.value} ${workspace.focus_metric.unit} · ${workspace.focus_metric.delta}`;
+  document.getElementById("diagnosis-actions").innerHTML = workspace.recommended_actions
+    .map(
+      (item) => `
+        <article class="report-block">
+          <h4>${item}</h4>
+          <p>${workspace.workflow_title}</p>
+        </article>
+      `,
+    )
+    .join("");
+  document.getElementById("diagnosis-rationale").textContent = workspace.gap_recommendation || workspace.rationale[0];
+  document.getElementById("diagnosis-evidence").innerHTML = workspace.evidence_grid
+    .map(
+      (item) => `
+        <div class="field-chip">
+          <span>${item.label}</span>
+          <strong>${item.value}</strong>
         </div>
       `,
     )
@@ -756,6 +1009,48 @@ async function loadNeuroWorkspace(caseId = null) {
   renderNeuroWorkspace(payload.workspace);
 }
 
+async function loadFindingsWorkspace(caseId = null) {
+  if (caseId) {
+    const workspace = await fetchJson(`/api/findings/cases/${caseId}`);
+    state.findings.caseId = caseId;
+    renderFindingsWorkspace(workspace);
+    return;
+  }
+  const payload = await fetchJson("/api/findings/workspace");
+  state.findings.caseId = payload.default_case_id;
+  state.findings.cases = payload.cases;
+  state.findings.queueSummary = payload.queue_summary;
+  renderFindingsWorkspace(payload.workspace);
+}
+
+async function loadQueueWorkspace(caseId = null) {
+  if (caseId) {
+    const workspace = await fetchJson(`/api/queue/cases/${caseId}`);
+    state.queue.caseId = caseId;
+    renderQueueWorkspace(workspace);
+    return;
+  }
+  const payload = await fetchJson("/api/queue/workspace");
+  state.queue.caseId = payload.default_case_id;
+  state.queue.cases = payload.cases;
+  state.queue.queueSummary = payload.queue_summary;
+  renderQueueWorkspace(payload.workspace);
+}
+
+async function loadDiagnosisWorkspace(caseId = null) {
+  if (caseId) {
+    const workspace = await fetchJson(`/api/diagnosis/cases/${caseId}`);
+    state.diagnosis.caseId = caseId;
+    renderDiagnosisWorkspace(workspace);
+    return;
+  }
+  const payload = await fetchJson("/api/diagnosis/workspace");
+  state.diagnosis.caseId = payload.default_case_id;
+  state.diagnosis.cases = payload.cases;
+  state.diagnosis.queueSummary = payload.queue_summary;
+  renderDiagnosisWorkspace(payload.workspace);
+}
+
 async function loadSafetyWorkspace(caseId = null) {
   if (caseId) {
     const workspace = await fetchJson(`/api/safety/cases/${caseId}`);
@@ -932,6 +1227,24 @@ function bindEvents() {
       setPage("safety");
       return;
     }
+    const findingsCaseButton = event.target.closest("[data-findings-case-id]");
+    if (findingsCaseButton) {
+      await loadFindingsWorkspace(findingsCaseButton.dataset.findingsCaseId);
+      setPage("findings");
+      return;
+    }
+    const queueCaseButton = event.target.closest("[data-queue-case-id]");
+    if (queueCaseButton) {
+      await loadQueueWorkspace(queueCaseButton.dataset.queueCaseId);
+      setPage("queue");
+      return;
+    }
+    const diagnosisCaseButton = event.target.closest("[data-diagnosis-case-id]");
+    if (diagnosisCaseButton) {
+      await loadDiagnosisWorkspace(diagnosisCaseButton.dataset.diagnosisCaseId);
+      setPage("diagnosis");
+      return;
+    }
     const homePrompt = event.target.closest(".home-prompt");
     if (homePrompt) {
       document.getElementById("command-input").value = homePrompt.dataset.prompt;
@@ -978,7 +1291,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   ];
   renderHomeChat();
   renderRouterCard();
-  await Promise.all([loadConsole(), loadNeuroWorkspace(), loadSafetyWorkspace()]);
+  await Promise.all([loadConsole(), loadNeuroWorkspace(), loadSafetyWorkspace(), loadQueueWorkspace(), loadDiagnosisWorkspace()]);
+  await loadFindingsWorkspace();
   setPage("home");
   setSubView("neuro", "command");
   setSubView("safety", "overview");

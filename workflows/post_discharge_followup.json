@@ -1,0 +1,38 @@
+{
+  "id": "post_discharge_followup",
+  "version": "1.0",
+  "title": "Coordinate Post-Discharge Follow-up",
+  "family": "queue_triage",
+  "specialties": ["primary_care", "system_level"],
+  "status": "prototype_ready",
+  "summary": "Review discharge context and risk factors, then draft timely follow-up actions for the care team.",
+  "problem_statement": "Patients can miss critical follow-up windows after discharge without proactive coordination.",
+  "live_test_ready": true,
+  "inputs": [
+    {"name": "discharge_summary", "source": "Discharge summary", "description": "Summary of hospitalization and discharge plan."},
+    {"name": "medication_context", "source": "Medication list", "description": "Key discharge medication context.", "required": false}
+  ],
+  "trigger_signals": ["discharge", "follow-up within", "readmission risk"],
+  "evidence_sources": ["discharge_summary", "medications", "risk_flags"],
+  "rule_sets": [
+    {"id": "post_discharge_triage", "summary": "If recent discharge and follow-up risk factors are present, draft time-sensitive outreach."}
+  ],
+  "actions": [
+    {"id": "review_item", "label": "Create discharge follow-up review item", "kind": "create_review_item", "description": "Open a care-transition task."},
+    {"id": "schedule_draft", "label": "Draft follow-up scheduling step", "kind": "draft_schedule", "description": "Prepare a follow-up scheduling recommendation."},
+    {"id": "owner_notice", "label": "Draft care-team notification", "kind": "mock_email", "description": "Prepare an internal follow-up note.", "reviewer_required": false}
+  ],
+  "presentation": {
+    "skill": "queue_triage_presenter",
+    "sections": ["Case Signal", "Timing Window", "Recommended Next Step", "Review Status"],
+    "tone": "compact_case_triage"
+  },
+  "examples": [
+    "Review this discharge and tell me who needs a 7-day follow-up.",
+    "Is this patient still missing time-sensitive post-discharge outreach?"
+  ],
+  "family_config": {
+    "priority_terms": ["readmission risk", "high-risk discharge", "follow-up within 7 days"],
+    "brief_focus": ["discharge signal", "timing window", "outreach move", "review need"]
+  }
+}

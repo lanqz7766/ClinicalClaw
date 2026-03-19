@@ -1,0 +1,109 @@
+{
+  "workflow_id": "high_risk_referral_triage",
+  "cases": [
+    {
+      "id": "triage_case_001",
+      "workflow_id": "high_risk_referral_triage",
+      "title": "Neurology referral with progressive weakness and speech changes",
+      "submitted_by": "Referral intake desk",
+      "received_at": "2026-03-18T09:45:00+00:00",
+      "status": "new",
+      "owner": "Neurology triage nurse",
+      "queue": "New referrals",
+      "due_at": "2026-03-18T11:00:00+00:00",
+      "patient_label": "Demo Referral A",
+      "service_line": "Neurology",
+      "source_type": "fax",
+      "clinical_context": "Referral contains same-day escalation language and neurologic change.",
+      "completion_state": "unknown",
+      "trigger_text": "Patient has progressive left-sided weakness, new speech changes, and worsening gait over 48 hours. Referring clinician requests same-day review.",
+      "focus_metric": {
+        "label": "Priority score",
+        "value": 94,
+        "unit": "/100",
+        "delta": "+28 at triage",
+        "tone": "urgent"
+      },
+      "trend_points": [
+        {"label": "Intake", "value": 66},
+        {"label": "Nurse screen", "value": 78},
+        {"label": "Current", "value": 94}
+      ],
+      "evidence_grid": [
+        {"label": "Queue lane", "value": "Routine referral intake"},
+        {"label": "Escalation cues", "value": "Weakness, speech changes, worsening gait"},
+        {"label": "Target action", "value": "Fast-track triage"},
+        {"label": "Current closure", "value": "Open"}
+      ]
+    },
+    {
+      "id": "triage_case_002",
+      "workflow_id": "high_risk_referral_triage",
+      "title": "Pulmonology referral with hemoptysis and weight loss",
+      "submitted_by": "Referral intake desk",
+      "received_at": "2026-03-18T10:10:00+00:00",
+      "status": "new",
+      "owner": "Pulmonary access coordinator",
+      "queue": "Priority consults",
+      "due_at": "2026-03-18T14:00:00+00:00",
+      "patient_label": "Demo Referral B",
+      "service_line": "Pulmonology",
+      "source_type": "fax",
+      "clinical_context": "Referral contains multiple escalation markers and an expedite request.",
+      "completion_state": "unknown",
+      "trigger_text": "Intermittent hemoptysis, 10 lb unintentional weight loss, and shortness of breath over two weeks. Request to expedite visit.",
+      "focus_metric": {
+        "label": "Priority score",
+        "value": 86,
+        "unit": "/100",
+        "delta": "+21 at triage",
+        "tone": "alert"
+      },
+      "trend_points": [
+        {"label": "Intake", "value": 54},
+        {"label": "Nurse screen", "value": 70},
+        {"label": "Current", "value": 86}
+      ],
+      "evidence_grid": [
+        {"label": "Queue lane", "value": "Routine referral intake"},
+        {"label": "Escalation cues", "value": "Hemoptysis, weight loss, shortness of breath"},
+        {"label": "Target action", "value": "Advance queue priority"},
+        {"label": "Current closure", "value": "Open"}
+      ]
+    },
+    {
+      "id": "triage_case_003",
+      "workflow_id": "high_risk_referral_triage",
+      "title": "Cardiology referral already routed to rapid access clinic",
+      "submitted_by": "Outpatient referral pool",
+      "received_at": "2026-03-18T16:10:00+00:00",
+      "status": "new",
+      "owner": "Cardiology scheduling lead",
+      "queue": "Rapid access clinic",
+      "due_at": "2026-03-21T09:00:00+00:00",
+      "patient_label": "Demo Referral C",
+      "service_line": "Cardiology",
+      "source_type": "portal",
+      "clinical_context": "Referral has already been scheduled into a fast-track path.",
+      "completion_state": "routed",
+      "trigger_text": "Urgent referral has already been assigned to the rapid access clinic for review.",
+      "focus_metric": {
+        "label": "Priority score",
+        "value": 62,
+        "unit": "/100",
+        "delta": "Queue already routed",
+        "tone": "watch"
+      },
+      "trend_points": [
+        {"label": "Intake", "value": 54},
+        {"label": "Triage", "value": 62}
+      ],
+      "evidence_grid": [
+        {"label": "Queue lane", "value": "Rapid access clinic"},
+        {"label": "Escalation cues", "value": "Urgent referral language"},
+        {"label": "Target action", "value": "Already routed"},
+        {"label": "Current closure", "value": "Routed"}
+      ]
+    }
+  ]
+}

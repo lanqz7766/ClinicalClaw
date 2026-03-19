@@ -52,6 +52,7 @@ Issues = "https://github.com/lanqz7766/ClinicalClaw/issues"
 
 [project.scripts]
 clawagents = "clawagents.__main__:main"
+clinicalclaw = "clinicalclaw.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clawagents", "src/clinicalclaw"]

@@ -1,0 +1,37 @@
+{
+  "id": "unrecognized_af_detection",
+  "version": "1.0",
+  "title": "Identify Unrecognized Atrial Fibrillation",
+  "family": "missed_diagnosis_detection",
+  "specialties": ["cardiology", "primary_care"],
+  "status": "prototype_ready",
+  "summary": "Identify atrial fibrillation documented in ECG or note text when the problem list does not reflect it.",
+  "problem_statement": "Atrial fibrillation can appear in study reports or notes without being reflected in the active problem list or follow-up plan.",
+  "live_test_ready": true,
+  "inputs": [
+    {"name": "report_text", "source": "ECG or monitoring report text", "description": "Text that may mention atrial fibrillation."},
+    {"name": "problem_list_summary", "source": "Problem list", "description": "Current diagnosis list.", "required": false},
+    {"name": "completion_state", "source": "Follow-up state", "description": "Whether evaluation or anticoagulation review has already happened.", "required": false}
+  ],
+  "trigger_signals": ["atrial fibrillation", "afib", "new onset af"],
+  "evidence_sources": ["ecg_report", "problem_list", "follow_up_status"],
+  "rule_sets": [
+    {"id": "af_gap_detection", "summary": "If AF appears in reports without problem-list closure, flag for cardiology review."}
+  ],
+  "actions": [
+    {"id": "review_item", "label": "Create AF review item", "kind": "create_review_item", "description": "Open a cardiology review task."},
+    {"id": "followup_plan", "label": "Draft AF evaluation plan", "kind": "draft_followup_plan", "description": "Prepare the immediate next-step guidance."},
+    {"id": "owner_notice", "label": "Draft urgent cardiology note", "kind": "mock_email", "description": "Prepare a concise escalation note.", "reviewer_required": false}
+  ],
+  "presentation": {
+    "skill": "clinical_report_presentation",
+    "sections": ["AF Signal", "Problem List Gap", "Recommended Follow-Up", "Review Status"]
+  },
+  "examples": [
+    "This ECG mentions new atrial fibrillation but it is not on the problem list."
+  ],
+  "family_config": {
+    "evidence_terms": ["atrial fibrillation", "afib", "new onset"],
+    "urgent_terms": ["new onset", "rapid ventricular response"]
+  }
+}

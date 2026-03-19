@@ -15,16 +15,14 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div class="brand-lockup">
+        <button class="brand-lockup brand-button" data-open-module="home" type="button">
           <p class="eyebrow">ClinicalClaw</p>
           <h1>Clinical Console</h1>
-        </div>
-        <nav class="topnav" aria-label="Primary navigation">
-          <button class="nav-item active" data-page="home" type="button">Home</button>
-          <button class="nav-item" data-page="workflows" type="button">Workflows</button>
-          <button class="nav-item" data-page="neuro" type="button">Neuro</button>
-          <button class="nav-item" data-page="safety" type="button">Safety</button>
-        </nav>
+        </button>
+        <details class="workflow-menu">
+          <summary class="workflow-menu-button">Workflows</summary>
+          <div id="workflow-menu-list" class="workflow-menu-list" role="menu" aria-label="Workflow navigation"></div>
+        </details>
       </header>
 
       <main class="page-stack">
@@ -73,6 +71,166 @@
             </div>
           </section>
           <div id="workflow-grid" class="workflow-grid"></div>
+        </section>
+
+        <section class="page-panel" data-page-panel="findings">
+          <section class="module-page">
+            <header class="module-page-header">
+              <div>
+                <p class="eyebrow">Findings Closure</p>
+                <h2 id="findings-title">Loading case...</h2>
+                <p id="findings-summary" class="support-copy"></p>
+                <div id="findings-meta" class="meta-row chips"></div>
+              </div>
+              <div class="module-header-side">
+                <span id="findings-risk-badge" class="risk-badge">Alert</span>
+                <a class="ghost-button" href="/findings-demo" target="_blank" rel="noreferrer">Open full module</a>
+              </div>
+            </header>
+
+            <div class="module-layout">
+              <aside class="module-rail">
+                <section class="card compact">
+                  <p class="section-label">Cases</p>
+                  <div id="findings-case-list" class="case-list"></div>
+                </section>
+              </aside>
+
+              <section class="module-content">
+                <div id="findings-summary-cards" class="summary-cards"></div>
+
+                <div class="grid two-col">
+                  <article class="card">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="section-label">Signal</p>
+                        <h3>Current focus metric</h3>
+                      </div>
+                    </div>
+                    <p id="findings-focus" class="hero-summary report-summary"></p>
+                    <div id="findings-actions" class="report-sections"></div>
+                  </article>
+
+                  <article class="card">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="section-label">Closure</p>
+                        <h3>Recommended next step</h3>
+                      </div>
+                    </div>
+                    <p id="findings-rationale" class="support-copy"></p>
+                    <div id="findings-evidence" class="field-grid"></div>
+                  </article>
+                </div>
+              </section>
+            </div>
+          </section>
+        </section>
+
+        <section class="page-panel" data-page-panel="queue">
+          <section class="module-page">
+            <header class="module-page-header">
+              <div>
+                <p class="eyebrow">Queue Triage</p>
+                <h2 id="queue-title">Loading case...</h2>
+                <p id="queue-subtitle" class="support-copy"></p>
+                <div id="queue-meta" class="meta-row chips"></div>
+              </div>
+              <div class="module-header-side">
+                <span id="queue-risk-badge" class="risk-badge">Alert</span>
+              </div>
+            </header>
+
+            <div class="module-layout">
+              <aside class="module-rail">
+                <section class="card compact">
+                  <p class="section-label">Cases</p>
+                  <div id="queue-case-list" class="case-list"></div>
+                </section>
+              </aside>
+
+              <section class="module-content">
+                <div id="queue-summary-cards" class="summary-cards"></div>
+
+                <div class="grid two-col">
+                  <article class="card">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="section-label">Signal</p>
+                        <h3>Priority and urgency</h3>
+                      </div>
+                    </div>
+                    <p id="queue-focus" class="hero-summary report-summary"></p>
+                    <div id="queue-actions" class="report-sections"></div>
+                  </article>
+
+                  <article class="card">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="section-label">Queue move</p>
+                        <h3>Recommended disposition</h3>
+                      </div>
+                    </div>
+                    <p id="queue-rationale" class="support-copy"></p>
+                    <div id="queue-evidence" class="field-grid"></div>
+                  </article>
+                </div>
+              </section>
+            </div>
+          </section>
+        </section>
+
+        <section class="page-panel" data-page-panel="diagnosis">
+          <section class="module-page">
+            <header class="module-page-header">
+              <div>
+                <p class="eyebrow">Missed Diagnosis Review</p>
+                <h2 id="diagnosis-title">Loading case...</h2>
+                <p id="diagnosis-subtitle" class="support-copy"></p>
+                <div id="diagnosis-meta" class="meta-row chips"></div>
+              </div>
+              <div class="module-header-side">
+                <span id="diagnosis-risk-badge" class="risk-badge">Alert</span>
+              </div>
+            </header>
+
+            <div class="module-layout">
+              <aside class="module-rail">
+                <section class="card compact">
+                  <p class="section-label">Cases</p>
+                  <div id="diagnosis-case-list" class="case-list"></div>
+                </section>
+              </aside>
+
+              <section class="module-content">
+                <div id="diagnosis-summary-cards" class="summary-cards"></div>
+
+                <div class="grid two-col">
+                  <article class="card">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="section-label">Signal</p>
+                        <h3>Missed diagnosis signal</h3>
+                      </div>
+                    </div>
+                    <p id="diagnosis-focus" class="hero-summary report-summary"></p>
+                    <div id="diagnosis-actions" class="report-sections"></div>
+                  </article>
+
+                  <article class="card">
+                    <div class="panel-heading">
+                      <div>
+                        <p class="section-label">Gap</p>
+                        <h3>Recommended follow-up</h3>
+                      </div>
+                    </div>
+                    <p id="diagnosis-rationale" class="support-copy"></p>
+                    <div id="diagnosis-evidence" class="field-grid"></div>
+                  </article>
+                </div>
+              </section>
+            </div>
+          </section>
         </section>
 
         <section class="page-panel" data-page-panel="neuro">

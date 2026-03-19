@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
-from clawagents import create_claw_agent
+from clinicalclaw.engine import create_claw_agent
 
 from clinicalclaw.config import ClinicalClawSettings
 from clinicalclaw.models import ScenarioSpec, ToolPolicy

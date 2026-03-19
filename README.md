@@ -9,6 +9,7 @@ ClinicalClaw is a modular clinical AI execution and integration platform built o
 - SMART on FHIR and DICOMweb sandbox validation paths
 - a unified `/demo` console with real chat routing into workflow modules
 - workflow-specific presentation skills for cleaner, clinician-facing output
+- a new `clinicalclaw.engine` compatibility namespace that begins internalizing the runtime under the ClinicalClaw brand
 
 ## What It Is Today
 
@@ -20,6 +21,7 @@ Current implemented areas:
 - scenario-controlled execution for:
   - `diagnostic_prep`
   - `imaging_qc`
+  - `t1_raw_ingest`
 - local persistence for:
   - tasks
   - artifacts
@@ -32,6 +34,7 @@ Current implemented areas:
 - DICOMweb QIDO and WADO sandbox validation
 - unified demo console with:
   - general chat landing page
+  - findings closure module
   - router agent
   - neuro longitudinal review module
   - radiation safety monitor module
@@ -62,9 +65,32 @@ The console includes:
 - a simplified general chat landing page
 - lightweight routing into the correct workflow
 - product-style streamed execution feedback
+- a compact workflow dropdown in the top-right navigation
 - separate module pages instead of flattening everything into one screen
+- compact module cards that surface 3 to 4 workflows per row on larger screens
 
 ### 3. Demo Modules
+
+Findings closure:
+
+- route: `/findings-demo`
+- focuses on actionable findings follow-up and closure verification
+- currently demonstrates `critical_lab_escalation`, `positive_fit_followup`, and `suspicious_lung_nodule_followup`
+- includes a compact signal view, closure path, recommended actions, mock escalation, and review
+
+Queue triage:
+
+- mounted inside `/demo`
+- focuses on high-risk referral triage and post-discharge follow-up prioritization
+- demonstrates `high_risk_referral_triage` and `post_discharge_followup`
+- uses a compact risk signal, queue move recommendation, and concise evidence blocks
+
+Missed diagnosis review:
+
+- mounted inside `/demo`
+- focuses on diagnosis-gap detection from report text and follow-up signals
+- currently demonstrates `missed_vertebral_fracture_detection`
+- uses a compact gap signal, workup recommendation, and review-first evidence summary
 
 Neuro longitudinal review:
 
@@ -87,10 +113,30 @@ Radiation safety monitor:
 ├── examples/                  # runnable SMART and DICOM sandbox entry scripts
 ├── scenarios/                 # scenario specifications
 ├── skills/                    # presentation and workflow-oriented agent skills
+├── workflows/                 # reusable workflow definitions and family docs
 ├── src/clawagents/            # vendored runtime from clawagents_py
-├── src/clinicalclaw/          # ClinicalClaw platform layer, demo modules, and orchestration
+├── src/clinicalclaw/          # ClinicalClaw platform layer, demo modules, orchestration, and engine facade
 └── tests/                     # regression and platform tests
 ```
+
+## Runtime Migration Status
+
+ClinicalClaw is in a compatibility-first migration toward a unified `clinicalclaw` runtime namespace.
+
+What is already available:
+
+- `clinicalclaw.engine` mirrors key `clawagents` runtime entry points
+- `clinicalclaw.create_claw_agent` now re-exports the new engine facade
+- `python -m clinicalclaw` and the `clinicalclaw` CLI script delegate to the existing runtime CLI
+- ClinicalClaw-owned modules such as the scenario runtime and console agent now import from `clinicalclaw.engine`
+
+What remains intentionally unchanged in Phase 1:
+
+- `src/clawagents` remains the real vendored runtime implementation
+- the original `clawagents` CLI and gateway imports remain supported
+- vendored runtime examples and broad upstream-style tests still target `clawagents`
+
+This lets us dogfood the new namespace without dropping compatibility.
 
 ## Quick Start
 
@@ -117,6 +163,12 @@ You only need live provider keys when you want real LLM execution. The local pla
 
 ```bash
 clawagents --serve
+```
+
+or:
+
+```bash
+clinicalclaw --serve
 ```
 
 Default local URL:
@@ -215,6 +267,22 @@ Relevant docs:
 - [docs/smart-on-fhir.md](/Users/qlan/Documents/Agent/ClinicalClaw/docs/smart-on-fhir.md)
 - [docs/dicomweb.md](/Users/qlan/Documents/Agent/ClinicalClaw/docs/dicomweb.md)
 - [docs/connectors.md](/Users/qlan/Documents/Agent/ClinicalClaw/docs/connectors.md)
+- [docs/workflow-engine.md](/Users/qlan/Documents/Agent/ClinicalClaw/docs/workflow-engine.md)
+- [docs/workflow-families.md](/Users/qlan/Documents/Agent/ClinicalClaw/docs/workflow-families.md)
+- [docs/neuro-environment.md](/Users/qlan/Documents/Agent/ClinicalClaw/docs/neuro-environment.md)
+
+## Neuro Ingest Direction
+
+The platform now includes a first neuro-oriented raw ingest scenario:
+
+- `t1_raw_ingest`
+  - scans raw DICOM exports
+  - inventories series headers without touching pixel payloads
+  - ranks likely T1 structural candidates
+  - prepares reviewable `dcm2niix` conversion plans
+  - emits a reproducible and schedulable pipeline manifest with stable run ids and resume commands
+
+This is meant to be the bridge between PACS-style raw exports and downstream T1-focused tooling such as MONAI, DeepPrep, or FreeSurfer-class pipelines.
 
 ## Persistence, Review, and Memory
 
@@ -247,15 +315,46 @@ Relevant docs:
 
 The current console uses a real streamed agent path plus workflow routing.
 
+Runtime entry points now available:
+
+- `from clinicalclaw import create_claw_agent`
+- `from clinicalclaw.engine import create_claw_agent`
+- `python -m clinicalclaw`
+- `clinicalclaw --serve`
+
 Current workflow router destinations:
 
 - `general_chat`
+- `findings_closure`
+- `queue_triage`
+- `missed_diagnosis_detection`
 - `neuro_longitudinal`
 - `radiation_safety_monitor`
+
+Reusable workflow engine work now in progress:
+
+- engine models and loader:
+  - [src/clinicalclaw/workflow_engine.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_engine.py)
+- initial workflow library:
+  - [workflows/](/Users/qlan/Documents/Agent/ClinicalClaw/workflows)
+- executable families:
+  - [src/clinicalclaw/workflow_families/findings_closure.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_families/findings_closure.py)
+  - [src/clinicalclaw/workflow_families/queue_triage.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_families/queue_triage.py)
+  - [src/clinicalclaw/workflow_families/missed_diagnosis.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/workflow_families/missed_diagnosis.py)
+- first end-to-end findings module:
+  - [src/clinicalclaw/findings_closure.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/findings_closure.py)
+  - [src/clinicalclaw/ui/findings/index.html](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/ui/findings/index.html)
+- queue triage local module foundation:
+  - [src/clinicalclaw/queue_triage.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/queue_triage.py)
+- missed diagnosis local module foundation:
+  - [src/clinicalclaw/missed_diagnosis.py](/Users/qlan/Documents/Agent/ClinicalClaw/src/clinicalclaw/missed_diagnosis.py)
 
 Presentation skills:
 
 - [skills/clinical_report_presentation/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/clinical_report_presentation/SKILL.md)
+- [skills/findings_brief_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/findings_brief_presenter/SKILL.md)
+- [skills/queue_triage_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/queue_triage_presenter/SKILL.md)
+- [skills/missed_diagnosis_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/missed_diagnosis_presenter/SKILL.md)
 - [skills/neuro_report_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/neuro_report_presenter/SKILL.md)
 - [skills/safety_brief_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/safety_brief_presenter/SKILL.md)
 

@@ -132,13 +132,77 @@ body {
   align-items: center;
 }
 
+.brand-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workflow-menu {
+  position: relative;
+}
+
+.workflow-menu-button {
+  list-style: none;
+  border-radius: 999px;
+  padding: 11px 16px;
+  background: rgba(18, 37, 54, 0.06);
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workflow-menu-button::-webkit-details-marker {
+  display: none;
+}
+
+.workflow-menu[open] .workflow-menu-button {
+  background: linear-gradient(135deg, var(--blue), #2b8dd9);
+  color: white;
+}
+
+.workflow-menu-list {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 240px;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: var(--shadow);
+  z-index: 20;
+}
+
+.workflow-menu-item {
+  border: 0;
+  padding: 11px 12px;
+  border-radius: 14px;
+  background: rgba(18, 37, 54, 0.04);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workflow-menu-item:hover {
+  background: rgba(13, 106, 184, 0.1);
+}
+
 .actions-row,
 .panel-heading,
 .chart-header {
   justify-content: space-between;
 }
 
-.nav-item,
 .subnav-item,
 .prompt-chip,
 .primary-button,
@@ -150,7 +214,6 @@ body {
   cursor: pointer;
 }
 
-.nav-item,
 .subnav-item,
 .shortcut-button {
   border: 0;
@@ -159,8 +222,6 @@ body {
   color: var(--text);
 }
 
-.nav-item.active,
-.nav-item:hover,
 .subnav-item.active,
 .subnav-item:hover {
   background: linear-gradient(135deg, var(--blue), #2b8dd9);
@@ -293,17 +354,17 @@ body {
 
 .workflow-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .workflow-grid.compact {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .workflow-card {
-  padding: 16px;
-  font-size: 0.9rem;
+  padding: 14px;
+  font-size: 0.86rem;
 }
 
 .workflow-card h3,
@@ -317,7 +378,30 @@ body {
 }
 
 .workflow-card .actions-row {
-  margin-top: 16px;
+  margin-top: 10px;
+}
+
+.workflow-card .section-label {
+  font-size: 0.68rem;
+}
+
+.workflow-card h3 {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.workflow-card .support-copy {
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.workflow-example {
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: rgba(18, 37, 54, 0.04);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
 .page-hero,
@@ -852,5 +936,12 @@ body {
   .chat-bubble,
   .chat-bubble.system {
     max-width: 100%;
+  }
+}
+
+@media (max-width: 1360px) {
+  .workflow-grid,
+  .workflow-grid.compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

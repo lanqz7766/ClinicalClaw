@@ -1,0 +1,36 @@
+{
+  "id": "abnormal_pap_routing",
+  "version": "1.0",
+  "title": "Route Abnormal Pap Smears",
+  "family": "findings_closure",
+  "specialties": ["womens_health"],
+  "status": "prototype_ready",
+  "summary": "Identify abnormal cervical cytology results and draft the next review or colposcopy step.",
+  "problem_statement": "Abnormal Pap smear findings need structured routing into gynecology follow-up pathways.",
+  "live_test_ready": true,
+  "inputs": [
+    {"name": "report_text", "source": "Cytology or pathology report", "description": "Abnormal cervical screening result text."},
+    {"name": "completion_state", "source": "Follow-up state", "description": "Whether colposcopy or the guideline-based next step is already arranged.", "required": false}
+  ],
+  "trigger_signals": ["abnormal pap", "asc-us", "hsil", "colposcopy"],
+  "evidence_sources": ["cytology_report", "prior_screening_status"],
+  "rule_sets": [
+    {"id": "abnormal_pap_followup", "summary": "If abnormal cytology is documented and no closure exists, route for women’s health follow-up."}
+  ],
+  "actions": [
+    {"id": "review_item", "label": "Create cervical follow-up review item", "kind": "create_review_item", "description": "Queue the screening follow-up case."},
+    {"id": "schedule_draft", "label": "Draft colposcopy scheduling step", "kind": "draft_schedule", "description": "Prepare the next scheduling action."},
+    {"id": "owner_notice", "label": "Draft care-team notification", "kind": "mock_email", "description": "Prepare a short clinician-facing message.", "reviewer_required": false}
+  ],
+  "presentation": {
+    "skill": "clinical_report_presentation",
+    "sections": ["Cytology Summary", "Follow-Up Need", "Recommended Next Step", "Review Status"]
+  },
+  "examples": [
+    "Abnormal Pap smear result; verify if colposcopy follow-up has been arranged."
+  ],
+  "family_config": {
+    "actionable_terms": ["abnormal", "hsil", "lsil", "asc-us", "colposcopy"],
+    "resolved_states": ["scheduled", "completed", "addressed"]
+  }
+}
