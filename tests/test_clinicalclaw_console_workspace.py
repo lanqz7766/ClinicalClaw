@@ -20,6 +20,7 @@ def test_route_general_query_can_select_findings_queue_diagnosis_screening_neuro
     diagnosis = route_general_query("Does this report suggest a missed vertebral fracture workup gap?")
     screening = route_general_query("Does this positive FIT still need colonoscopy follow-up?")
     neuro = route_general_query("Review this MRI longitudinal atrophy trend and generate a report.")
+    metastasis = route_general_query("Review this longitudinal brain metastasis MRI trend and draft a physician report.")
     safety = route_general_query("Check whether this radiation plan incident should trigger an alert.")
 
     assert findings["target_module"] == "findings"
@@ -31,6 +32,9 @@ def test_route_general_query_can_select_findings_queue_diagnosis_screening_neuro
     assert screening["target_module"] == "screening"
     assert "gap_checker" in screening["suggested_steps"]
     assert neuro["target_module"] == "neuro"
-    assert "volume_trend_analyzer" in neuro["suggested_steps"]
+    assert "brain_met_response_tracker" in neuro["suggested_steps"]
+    assert metastasis["target_module"] == "neuro"
+    assert metastasis["workflow"]["id"] == "neuro_longitudinal"
+    assert "brain_met_response_tracker" in metastasis["suggested_steps"]
     assert safety["target_module"] == "safety"
     assert "risk_tier_engine" in safety["suggested_steps"]

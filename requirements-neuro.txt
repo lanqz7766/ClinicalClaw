@@ -1,0 +1,13 @@
+-e .[dev]
+nibabel
+pydicom
+SimpleITK
+dcm2bids
+pybids
+torch
+monai
+
+# Optional:
+# highdicom was intentionally left out of the default neuro requirements on
+# this machine because its pyjpegls dependency failed to build under the
+# current toolchain.

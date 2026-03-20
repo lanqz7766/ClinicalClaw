@@ -1,6 +1,6 @@
 const state = {
   page: "home",
-  neuroView: "command",
+  neuroView: "analysis",
   safetyView: "overview",
   console: null,
   findings: {
@@ -106,6 +106,60 @@ function formatTimestamp(value) {
 
 function titleCase(value) {
   return (value || "").replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatSignedNumber(value, digits = 2, unit = "") {
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${Number(value).toFixed(digits)}${unit}`;
+}
+
+function formatSignedPercent(value, digits = 1) {
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${Number(value).toFixed(digits)}%`;
+}
+
+function formatSpan(startValue, endValue) {
+  const start = new Date(startValue);
+  const end = new Date(endValue);
+  const days = Math.max((end - start) / (1000 * 60 * 60 * 24), 0);
+  const months = days / 30.4375;
+  if (months >= 12) {
+    const years = months / 12;
+    const rounded = Math.abs(years - Math.round(years)) < 0.15 ? Math.round(years) : years.toFixed(1);
+    return `${rounded} year${Number(rounded) === 1 ? "" : "s"}`;
+  }
+  const roundedMonths = Math.max(Math.round(months), 0);
+  return `${roundedMonths} month${roundedMonths === 1 ? "" : "s"}`;
+}
+
+function svgDataUrl(svg) {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function getNeuroSnapshot(workspace = {}) {
+  const points = workspace.timeline || [];
+  const first = points[0] || {};
+  const latest = points[points.length - 1] || {};
+  const previous = points[points.length - 2] || latest;
+  const span = first.study_date && latest.study_date ? formatSpan(first.study_date, latest.study_date) : "multiple follow-ups";
+  const baseline = Number(first.lesion_volume_ml || 0);
+  const current = Number(latest.lesion_volume_ml || 0);
+  const previousTotal = Number(previous.lesion_volume_ml || current);
+  const delta = current - baseline;
+  const recentDelta = current - previousTotal;
+  const deltaPct = baseline ? (delta / baseline) * 100 : 0;
+  const recentPct = previousTotal ? (recentDelta / previousTotal) * 100 : 0;
+  return {
+    pointCount: points.length,
+    span,
+    baseline,
+    current,
+    delta,
+    deltaPct,
+    recentDelta,
+    recentPct,
+    trendLabel: delta > 0 ? (recentPct > 8 ? "Progressive interval growth" : "Higher than baseline burden") : "Lower than baseline burden",
+  };
 }
 
 function reviewLabel(value) {
@@ -374,24 +428,11 @@ function renderRouterCard(payload = null) {
 }
 
 function renderNeuroCaseList() {
-  const container = document.getElementById("neuro-case-list");
-  container.innerHTML = state.neuro.cases
+  const selector = document.getElementById("neuro-case-select");
+  selector.innerHTML = state.neuro.cases
     .map(
-      (item) => `
-        <div class="case-item${item.id === state.neuro.caseId ? " active" : ""}">
-          <button type="button" data-neuro-case-id="${item.id}">
-            <div class="meta-row">
-              <strong>${item.patient.display_name}</strong>
-              <span>${reviewLabel(item.review.status)}</span>
-            </div>
-            <p>${item.patient.diagnosis}</p>
-            <div class="meta-row">
-              <span>${item.dataset}</span>
-              <span>${item.risk_level}</span>
-            </div>
-          </button>
-        </div>
-      `,
+      (item) =>
+        `<option value="${item.id}" ${item.id === state.neuro.caseId ? "selected" : ""}>${item.patient.display_name} · ${item.risk_level}</option>`,
     )
     .join("");
 }
@@ -693,24 +734,33 @@ function renderUploads(uploads) {
 
 function renderNeuroHero(workspace) {
   const patient = workspace.patient;
-  document.getElementById("patient-name").textContent = patient.display_name;
-  document.getElementById("patient-summary").textContent = patient.summary;
+  const snapshot = getNeuroSnapshot(workspace);
+  document.getElementById("patient-name").textContent = patient.display_name || workspace.title;
+  document.getElementById("patient-summary").textContent =
+    patient.summary || `${snapshot.pointCount} follow-up timepoints over ${snapshot.span}. Latest imaging shows ${snapshot.trendLabel.toLowerCase()}.`;
   document.getElementById("patient-meta").innerHTML = `
-    <span>ID ${patient.id}</span>
+    <span>Case ${patient.id}</span>
     <span>${patient.sex}</span>
     <span>Age ${patient.age}</span>
-    <span>${patient.diagnosis}</span>
+    <span>${patient.histology || "Brain metastasis"}</span>
+    <span>${snapshot.pointCount} scans</span>
   `;
   document.getElementById("review-badge").textContent = reviewLabel(workspace.review.status);
   document.getElementById("risk-pill").textContent = workspace.analysis.risk_level;
+  document.getElementById("neuro-signal-number").textContent = `${titleCase(snapshot.trendLabel)} post-RT signal`;
+  document.getElementById("neuro-signal-note").textContent = `${snapshot.pointCount} scans across ${snapshot.span}.`;
 }
 
-function renderMetrics(analysis) {
+function renderMetrics(workspace) {
+  const analysis = workspace.analysis;
+  const snapshot = getNeuroSnapshot(workspace);
+  const baselineMl = Number(analysis.baseline_total_ml ?? analysis.baseline_volume_ml ?? snapshot.baseline ?? 0);
+  const latestMl = Number(analysis.latest_total_ml ?? analysis.latest_volume_ml ?? snapshot.current ?? 0);
   const metrics = [
-    { label: "Baseline", value: `${analysis.baseline_total_ml.toFixed(2)} mL` },
-    { label: "Latest", value: `${analysis.latest_total_ml.toFixed(2)} mL` },
-    { label: "Annualized", value: `${analysis.annual_change_pct}% / year` },
-    { label: "Recent segment", value: `${analysis.recent_segment_pct}% / year` },
+    { label: "Scans", value: `${snapshot.pointCount}` },
+    { label: "Span", value: snapshot.span },
+    { label: "Baseline", value: `${baselineMl.toFixed(2)} mL` },
+    { label: "Latest", value: `${latestMl.toFixed(2)} mL` },
   ];
   document.getElementById("metric-grid").innerHTML = metrics
     .map(
@@ -750,7 +800,6 @@ function renderWorkflow(workflow) {
           <header>
             <div>
               <strong>${step.name}</strong>
-              <div class="support-copy">${step.tool}</div>
             </div>
             <span class="step-badge">${step.status}</span>
           </header>
@@ -762,24 +811,19 @@ function renderWorkflow(workflow) {
 }
 
 function renderTimeline(points) {
-  document.getElementById("timeline").innerHTML = points
+  const container = document.getElementById("timeline");
+  container.innerHTML = points
     .map(
-      (point) => `
-        <article class="timeline-card">
-          <div class="meta-row">
-            <strong>${formatDate(point.study_date)}</strong>
-            <span>${point.sequence}</span>
-          </div>
-          <p>${point.diagnosis}</p>
-          <div class="meta-row">
-            <span>L ${point.left_hippocampus_ml.toFixed(2)} mL</span>
-            <span>R ${point.right_hippocampus_ml.toFixed(2)} mL</span>
-            <span>Total ${point.total_hippocampus_ml.toFixed(2)} mL</span>
-          </div>
-        </article>
+      (point, index) => `
+        <div class="timeline-node${index === points.length - 1 ? " latest" : ""}">
+          <span class="timeline-dot"></span>
+          <strong>${titleCase(point.timepoint)}</strong>
+          <small>${formatDate(point.study_date)}</small>
+        </div>
       `,
     )
     .join("");
+  container.dataset.count = `${points.length}`;
 }
 
 function buildChartPath(points, key, width, height, padding, min, max) {
@@ -797,45 +841,89 @@ function renderChart(points) {
   const svg = document.getElementById("trend-chart");
   const width = 560;
   const height = 240;
-  const padding = 28;
-  const totalSeries = points.map((point) => ({
+  const padding = 30;
+  const series = points.map((point) => ({
     ...point,
-    total_hippocampus_ml: point.left_hippocampus_ml + point.right_hippocampus_ml,
+    lesion_volume_ml: Number(point.lesion_volume_ml || 0),
   }));
-  const allValues = [
-    ...points.map((point) => point.left_hippocampus_ml),
-    ...points.map((point) => point.right_hippocampus_ml),
-    ...totalSeries.map((point) => point.total_hippocampus_ml),
-  ];
-  const min = Math.min(...allValues) - 0.08;
-  const max = Math.max(...allValues) + 0.08;
-  const leftPath = buildChartPath(points, "left_hippocampus_ml", width, height, padding, min, max);
-  const rightPath = buildChartPath(points, "right_hippocampus_ml", width, height, padding, min, max);
-  const totalPath = buildChartPath(totalSeries, "total_hippocampus_ml", width, height, padding, min, max);
+  const allValues = [...series.map((point) => point.lesion_volume_ml)];
+  const min = Math.min(...allValues) * 0.88;
+  const max = Math.max(...allValues) * 1.12;
+  const totalPath = buildChartPath(series, "lesion_volume_ml", width, height, padding, min, max);
+  const coordinates = series.map((point, index) => {
+    const x = padding + (index / Math.max(series.length - 1, 1)) * (width - padding * 2);
+    const ratio = (point.lesion_volume_ml - min) / Math.max(max - min, 0.001);
+    const y = height - padding - ratio * (height - padding * 2);
+    return { x, y, point };
+  });
+  const areaPath = `${totalPath} L ${width - padding} ${height - padding} L ${padding} ${height - padding} Z`;
+  const baselineY =
+    height -
+    padding -
+    (((series[0]?.lesion_volume_ml || 0) - min) / Math.max(max - min, 0.001)) * (height - padding * 2);
+  const markerLabels = coordinates
+    .map((coordinate, index) => {
+      const isLatest = index === coordinates.length - 1;
+      const isFirst = index === 0;
+      const label = isFirst ? "Baseline" : isLatest ? "Latest" : titleCase(coordinate.point.timepoint);
+      return `
+        <g>
+          <circle cx="${coordinate.x.toFixed(1)}" cy="${coordinate.y.toFixed(1)}" r="${isLatest ? 7 : 5}" fill="${isLatest ? "#c14553" : "#0d6ab8"}" stroke="white" stroke-width="2"></circle>
+          <text x="${coordinate.x.toFixed(1)}" y="${coordinate.y - 14}" fill="#66798c" font-size="11" text-anchor="middle">${label}</text>
+        </g>
+      `;
+    })
+    .join("");
 
   svg.innerHTML = `
-    <rect x="0" y="0" width="${width}" height="${height}" rx="22" fill="white"></rect>
+    <defs>
+      <linearGradient id="neuro-fill" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0%" stop-color="#0d6ab8" stop-opacity="0.28"></stop>
+        <stop offset="100%" stop-color="#0d6ab8" stop-opacity="0.02"></stop>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="${width}" height="${height}" rx="22" fill="#FFFFFF" fill-opacity="0.92"></rect>
+    <path d="${areaPath}" fill="url(#neuro-fill)" stroke="none"></path>
+    <line x1="${padding}" y1="${baselineY.toFixed(1)}" x2="${width - padding}" y2="${baselineY.toFixed(1)}" stroke="rgba(197, 75, 91, 0.18)" stroke-dasharray="5 6"></line>
     <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="rgba(15,39,59,0.1)"></line>
-    <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="rgba(15,39,59,0.1)"></line>
-    <path d="${leftPath}" fill="none" stroke="#0d6ab8" stroke-width="4" stroke-linecap="round"></path>
-    <path d="${rightPath}" fill="none" stroke="#157d76" stroke-width="4" stroke-linecap="round"></path>
-    <path d="${totalPath}" fill="none" stroke="#6e7f91" stroke-width="3" stroke-dasharray="8 7" stroke-linecap="round"></path>
+    <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="rgba(15,39,59,0.08)"></line>
+    <path d="${totalPath}" fill="none" stroke="#0d6ab8" stroke-width="4" stroke-linecap="round"></path>
+    ${markerLabels}
+    <text x="${padding}" y="${padding - 6}" fill="#66798c" font-size="12">Lower burden</text>
+    <text x="${width - padding}" y="${padding - 6}" fill="#66798c" font-size="12" text-anchor="end">Higher burden</text>
   `;
 }
 
-function renderNeuroAnalysis(analysis) {
+function renderNeuroAnalysis(workspace) {
+  const analysis = workspace.analysis;
+  const snapshot = getNeuroSnapshot(workspace);
+  const baselineMl = Number(analysis.baseline_total_ml ?? analysis.baseline_volume_ml ?? snapshot.baseline ?? 0);
+  const latestMl = Number(analysis.latest_total_ml ?? analysis.latest_volume_ml ?? snapshot.current ?? 0);
+  const recentPct = Number(analysis.recent_segment_pct ?? analysis.recent_interval_change_pct ?? snapshot.recentPct ?? 0);
   document.getElementById("attention-banner").innerHTML = `
-    <strong>High-attention longitudinal change</strong>
+    <strong>${analysis.risk_level} post-treatment signal</strong>
     <div>${analysis.risk_reason}</div>
   `;
+  document.getElementById("neuro-baseline-value").textContent = `${baselineMl.toFixed(2)} mL`;
+  document.getElementById("neuro-latest-value").textContent = `${latestMl.toFixed(2)} mL`;
+  document.getElementById("neuro-recent-note").textContent =
+    `Recent interval ${formatSignedPercent(recentPct)} · overall ${formatSignedPercent(snapshot.deltaPct)} from baseline.`;
 }
 
-function renderReport(report, preview) {
-  document.getElementById("preview-image").src = preview.image_url;
-  document.getElementById("preview-caption").textContent = preview.caption;
-  document.getElementById("report-title").textContent = report.title;
-  document.getElementById("report-summary").textContent = report.summary;
-  document.getElementById("report-sections").innerHTML = report.sections
+function renderReport(workspace) {
+  const report = workspace.report || {};
+  const preview = workspace.imaging_preview || {};
+  const visualizations = workspace.visualizations || {};
+  const previewUrl =
+    preview.image_url ||
+    (visualizations.comparison_svg ? svgDataUrl(visualizations.comparison_svg) : null) ||
+    "/demo-assets/brain-metastasis-preview.svg";
+  document.getElementById("preview-image").src = previewUrl;
+  document.getElementById("preview-caption").textContent = preview.caption || "";
+  document.getElementById("report-title").textContent = report.title || "Longitudinal review brief";
+  document.getElementById("report-summary").textContent = report.summary || "";
+  document.getElementById("report-sections").innerHTML = (report.sections || [])
+    .slice(0, 3)
     .map(
       (section) => `
         <article class="report-block">
@@ -845,9 +933,9 @@ function renderReport(report, preview) {
       `,
     )
     .join("");
-  document.getElementById("physician-questions").innerHTML = report.physician_questions
-    .map((item) => `<li>${item}</li>`)
-    .join("");
+  document.getElementById("report-footnote").textContent = `Next review focus: ${
+    (report.physician_questions || [])[0] || "Correlate the latest MRI with symptoms and treatment timing."
+  }`;
 }
 
 function renderNeuroReview(review, audit) {
@@ -883,13 +971,13 @@ function renderNeuroWorkspace(workspace) {
   state.neuro.workspace = workspace;
   renderNeuroCaseList();
   renderNeuroHero(workspace);
-  renderMetrics(workspace.analysis);
+  renderMetrics(workspace);
   renderNeuroChat(workspace.messages);
   renderWorkflow(workspace.workflow);
   renderTimeline(workspace.timeline);
   renderChart(workspace.timeline);
-  renderNeuroAnalysis(workspace.analysis);
-  renderReport(workspace.report, workspace.imaging_preview);
+  renderNeuroAnalysis(workspace);
+  renderReport(workspace);
   renderNeuroReview(workspace.review, workspace.audit);
   renderUploads(workspace.uploads);
 }
@@ -1252,7 +1340,7 @@ async function handleNeuroChat(event) {
     body: JSON.stringify({ case_id: state.neuro.caseId, message }),
   });
   renderNeuroWorkspace(payload.workspace);
-  setSubView("neuro", "command");
+  setSubView("neuro", "analysis");
 }
 
 async function handleNeuroReview(action) {
@@ -1365,6 +1453,12 @@ function bindEvents() {
     await handleUpload(event.target.files);
     event.target.value = "";
   });
+  document.getElementById("neuro-case-select").addEventListener("change", async (event) => {
+    if (!event.target.value) {
+      return;
+    }
+    await loadNeuroWorkspace(event.target.value);
+  });
   document.querySelectorAll("[data-review-action]").forEach((button) => {
     button.addEventListener("click", () => handleNeuroReview(button.dataset.reviewAction));
   });
@@ -1401,6 +1495,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   ]);
   await loadFindingsWorkspace();
   setPage("home");
-  setSubView("neuro", "command");
+  setSubView("neuro", "analysis");
   setSubView("safety", "overview");
 });

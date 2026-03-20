@@ -16,26 +16,42 @@ def test_demo_workspace_snapshot_has_longitudinal_case():
     store = DemoWorkspaceStore()
     payload = store.snapshot()
 
-    assert payload["default_case_id"] == "oasis3-demo-hippocampus"
-    assert payload["workspace"]["analysis"]["accelerated_decline"] is True
-    assert len(payload["workspace"]["timeline"]) == 4
+    assert payload["default_case_id"]
+    assert payload["workspace"]["title"]
+    assert len(payload["workspace"]["timeline"]) >= 4
+    assert payload["workspace"]["analysis"]["risk_level"]
+    assert payload["workspace"]["patient"]["display_name"].startswith("Subject ")
+
+
+def test_demo_workspace_prefers_real_proteas_case_when_env_is_set(monkeypatch):
+    monkeypatch.setenv("CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT", "/Users/qlan/Documents/Agent/Data/17253793")
+    store = DemoWorkspaceStore()
+
+    payload = store.snapshot()
+
+    assert payload["default_case_id"].startswith("proteas-")
+    assert payload["workspace"]["id"].startswith("proteas-")
+    assert len(payload["workspace"]["timeline"]) >= 4
+    assert payload["workspace"]["visualizations"]["trend_svg"].startswith("<svg")
 
 
 def test_demo_workspace_chat_updates_messages():
     store = DemoWorkspaceStore()
+    case_id = store.snapshot()["default_case_id"]
     response = store.chat(
-        case_id="oasis3-demo-hippocampus",
-        message="Generate the hippocampal atrophy report for this patient.",
+        case_id=case_id,
+        message="Generate the longitudinal review brief for this patient.",
     )
 
-    assert "accelerated bilateral hippocampal decline" in response["assistant"]["content"]
+    assert response["assistant"]["content"]
     assert response["workspace"]["review"]["status"] == "in_review"
 
 
 def test_demo_workspace_review_updates_status():
     store = DemoWorkspaceStore()
+    case_id = store.snapshot()["default_case_id"]
     workspace = store.review(
-        case_id="oasis3-demo-hippocampus",
+        case_id=case_id,
         action="approve",
         comment="Mock reviewer approved the longitudinal report.",
     )
@@ -56,7 +72,7 @@ def test_demo_routes_expose_workspace_and_chat():
 
         workspace_response = client.get("/api/demo/workspace")
         assert workspace_response.status_code == 200
-        assert workspace_response.json()["workspace"]["patient"]["display_name"] == "Subject OAS3-1142"
+        assert workspace_response.json()["workspace"]["patient"]["display_name"].startswith("Subject ")
 
         command_response = client.post(
             "/api/demo/command",
@@ -89,17 +105,18 @@ def test_demo_routes_expose_workspace_and_chat():
         chat_response = client.post(
             "/api/demo/chat",
             json={
-                "case_id": "oasis3-demo-hippocampus",
-                "message": "Explain why this mock case is considered high risk.",
+                "case_id": workspace_response.json()["default_case_id"],
+                "message": "Explain why this case is considered high risk.",
             },
         )
         assert chat_response.status_code == 200
-        assert "trend-based warning" in chat_response.json()["assistant"]["content"]
+        assert chat_response.json()["assistant"]["content"]
 
         demo_page = client.get("/demo")
         assert demo_page.status_code == 200
         assert "General Clinical Command" in demo_page.text
         assert "Workflows" in demo_page.text
+        assert "Neuro Longitudinal Review" in demo_page.text
         assert "Findings Closure" in demo_page.text
         assert "Queue Triage" in demo_page.text
         assert "Missed Diagnosis Review" in demo_page.text

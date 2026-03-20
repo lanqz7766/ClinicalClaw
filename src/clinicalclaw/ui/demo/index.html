@@ -304,39 +304,31 @@
         </section>
 
         <section class="page-panel" data-page-panel="neuro">
-          <section class="module-page">
-            <header class="module-page-header">
+          <section class="module-page neuro-module">
+            <header class="module-page-header neuro-header">
               <div>
                 <p class="eyebrow">Neuro Longitudinal Review</p>
                 <h2 id="patient-name">Loading...</h2>
                 <p id="patient-summary" class="support-copy"></p>
                 <div id="patient-meta" class="meta-row chips"></div>
               </div>
-              <div class="module-header-side">
+              <div class="module-header-side neuro-header-side">
+                <label class="neuro-case-picker">
+                  <span class="section-label">Case</span>
+                  <select id="neuro-case-select"></select>
+                </label>
                 <span id="review-badge" class="status-badge">In Review</span>
                 <span id="risk-pill" class="pill pill-risk">High attention</span>
+                <div class="neuro-signal-chip">
+                  <span class="section-label">Signal</span>
+                  <strong id="neuro-signal-number">Longitudinal review</strong>
+                  <small id="neuro-signal-note">Composite burden and interval trend</small>
+                </div>
               </div>
             </header>
 
-            <div class="module-layout">
-              <aside class="module-rail">
-                <section class="card compact">
-                  <p class="section-label">Cases</p>
-                  <div id="neuro-case-list" class="case-list"></div>
-                </section>
-
-                <section class="card compact">
-                  <p class="section-label">Uploads</p>
-                  <label class="upload-dropzone" for="file-input">
-                    <input id="file-input" type="file" multiple />
-                    <strong>Attach notes</strong>
-                    <span>Prototype only</span>
-                  </label>
-                  <div id="upload-list" class="upload-list"></div>
-                </section>
-              </aside>
-
-              <section class="module-content">
+            <div class="module-layout neuro-layout">
+              <section class="module-content neuro-content">
                 <div id="metric-grid" class="metric-grid"></div>
 
                 <nav class="subnav">
@@ -347,7 +339,7 @@
 
                 <section class="subpanel active" data-neuro-panel="command">
                   <div class="grid two-col">
-                    <article class="card">
+                    <article class="card neuro-chat-card">
                       <div class="panel-heading">
                         <div>
                           <p class="section-label">Chat Workspace</p>
@@ -355,13 +347,13 @@
                         </div>
                       </div>
                       <div class="prompt-row">
-                        <button class="prompt-chip neuro-prompt" data-prompt="Generate the hippocampal atrophy report for this patient.">Generate report</button>
-                        <button class="prompt-chip neuro-prompt" data-prompt="Explain why the case is flagged as accelerated decline.">Explain risk</button>
-                        <button class="prompt-chip neuro-prompt" data-prompt="Summarize the longitudinal MRI trend for the physician reviewer.">Summarize trend</button>
+                        <button class="prompt-chip neuro-prompt" data-prompt="Draft a longitudinal brain metastasis brief for this case.">Draft brief</button>
+                        <button class="prompt-chip neuro-prompt" data-prompt="Show the latest burden trend and explain the signal.">Show trend</button>
+                        <button class="prompt-chip neuro-prompt" data-prompt="Summarize the follow-up review for a physician reader.">Summarize review</button>
                       </div>
                       <div id="chat-log" class="chat-log"></div>
                       <form id="chat-form" class="chat-form">
-                        <textarea id="chat-input" rows="3" placeholder="Ask for a report or trend explanation."></textarea>
+                        <textarea id="chat-input" rows="3" placeholder="Ask for a review brief or trend explanation."></textarea>
                         <div class="actions-row">
                           <span class="hint">Controlled neuro workflow, not free-form diagnosis.</span>
                           <button type="submit" class="primary-button">Send task</button>
@@ -369,7 +361,7 @@
                       </form>
                     </article>
 
-                    <article class="card">
+                    <article class="card neuro-workflow-card">
                       <div class="panel-heading">
                         <div>
                           <p class="section-label">Workflow</p>
@@ -379,49 +371,80 @@
                       </div>
                       <p id="workflow-objective" class="support-copy"></p>
                       <div id="workflow-steps" class="workflow-steps"></div>
+                      <div class="divider-line"></div>
+                      <div class="upload-inline">
+                        <p class="section-label">Attachments</p>
+                        <label class="upload-dropzone compact-dropzone" for="file-input">
+                          <input id="file-input" type="file" multiple />
+                          <strong>Attach notes</strong>
+                          <span>Optional local demo input</span>
+                        </label>
+                        <div id="upload-list" class="upload-list"></div>
+                      </div>
                     </article>
                   </div>
                 </section>
 
                 <section class="subpanel" data-neuro-panel="analysis">
-                  <div class="grid two-col">
-                    <article class="card">
+                  <div class="neuro-hero-grid">
+                    <article class="card neuro-signal-card">
                       <div class="panel-heading">
                         <div>
-                          <p class="section-label">Trend</p>
-                          <h3>Bilateral hippocampal volume</h3>
+                          <p class="section-label">Signal</p>
+                          <h3>Composite burden and trend</h3>
                         </div>
                       </div>
                       <div id="attention-banner" class="attention-banner"></div>
-                      <div class="chart-card">
-                        <div class="chart-header">
-                          <span>Volume vs time</span>
-                          <span class="chart-legend">
-                            <i class="legend-dot legend-blue"></i> Left
-                            <i class="legend-dot legend-teal"></i> Right
-                            <i class="legend-dot legend-slate"></i> Total
-                          </span>
+                      <div class="signal-strip">
+                        <div class="signal-chip">
+                          <span>Baseline</span>
+                          <strong id="neuro-baseline-value">-</strong>
                         </div>
-                        <svg id="trend-chart" class="trend-chart" viewBox="0 0 560 240" aria-label="Hippocampal trend chart"></svg>
+                        <div class="signal-chip">
+                          <span>Latest</span>
+                          <strong id="neuro-latest-value">-</strong>
+                        </div>
                       </div>
-                      <div id="timeline" class="timeline compact-list"></div>
+                      <p id="neuro-recent-note" class="support-copy compact-note"></p>
                     </article>
 
-                    <article class="card">
+                    <article class="card neuro-chart-card">
+                      <div class="chart-header">
+                        <div>
+                          <p class="section-label">Trend</p>
+                          <h3>Composite burden vs time</h3>
+                        </div>
+                        <span class="chart-legend">
+                          <i class="legend-dot legend-blue"></i> Composite burden
+                        </span>
+                      </div>
+                      <svg id="trend-chart" class="trend-chart" viewBox="0 0 560 240" aria-label="Longitudinal burden chart"></svg>
+                      <div id="timeline" class="timeline-bar"></div>
+                    </article>
+                  </div>
+
+                  <div class="grid two-col neuro-analysis-grid">
+                    <article class="card neuro-preview-card">
                       <div class="panel-heading">
                         <div>
-                          <p class="section-label">Report</p>
-                          <h3 id="report-title">Longitudinal report</h3>
+                          <p class="section-label">Imaging Preview</p>
+                          <h3>Representative follow-up slice</h3>
                         </div>
                       </div>
-                      <img id="preview-image" class="preview-image" src="" alt="Representative MRI preview" />
+                      <img id="preview-image" class="preview-image" src="" alt="Representative follow-up MRI with lesion overlay" />
                       <p id="preview-caption" class="support-copy"></p>
+                    </article>
+
+                    <article class="card neuro-report-card">
+                      <div class="panel-heading">
+                        <div>
+                          <p class="section-label">Physician Brief</p>
+                          <h3 id="report-title">Longitudinal review brief</h3>
+                        </div>
+                      </div>
                       <p id="report-summary" class="hero-summary report-summary"></p>
                       <div id="report-sections" class="report-sections"></div>
-                      <div class="question-card">
-                        <p class="section-label">Physician follow-up</p>
-                        <ul id="physician-questions" class="question-list"></ul>
-                      </div>
+                      <p id="report-footnote" class="support-copy compact-note"></p>
                     </article>
                   </div>
                 </section>

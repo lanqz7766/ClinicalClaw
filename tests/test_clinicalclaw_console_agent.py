@@ -127,6 +127,11 @@ def test_build_console_agent_loads_presentation_skill():
     assert "get_queue_workspace" in allowed
     assert "get_diagnosis_workspace" in allowed
     assert "get_screening_workspace" in allowed
+    assert "lesion_trend_plotter" in allowed
+    assert "treatment_event_timeline_renderer" in allowed
+    assert "key_slice_selector" in allowed
+    assert "overlay_composer" in allowed
+    assert "risk_signal_renderer" in allowed
 
 
 def test_demo_execute_stream_emits_routed_and_done():

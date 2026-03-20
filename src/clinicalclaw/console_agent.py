@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -11,12 +12,59 @@ from clinicalclaw.console_workspace import WORKFLOWS, rank_workflows, route_gene
 from clinicalclaw.demo_workspace import demo_workspace_store
 from clinicalclaw.findings_closure import findings_closure_store
 from clinicalclaw.missed_diagnosis import missed_diagnosis_store
+from clinicalclaw.neuro_longitudinal_proteas import (
+    DEFAULT_NEURO_DATA_ENV,
+    build_neuro_longitudinal_workspace,
+    summarize_neuro_longitudinal_workspace,
+)
 from clinicalclaw.queue_triage import queue_triage_store
 from clinicalclaw.screening_gap import screening_gap_store
 from clinicalclaw.safety_monitor import KNOWLEDGE_BASE, safety_monitor_store
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILLS_DIR = str(REPO_ROOT / "skills")
+
+
+def _is_proteas_patient_id(value: Any) -> bool:
+    text = str(value or "").strip()
+    return bool(text) and text.upper().startswith("P")
+
+
+def _resolve_neuro_patient_id(args: dict[str, Any]) -> str | None:
+    if _is_proteas_patient_id(args.get("patient_id")):
+        return str(args["patient_id"]).strip().upper()
+    if _is_proteas_patient_id(args.get("case_id")):
+        return str(args["case_id"]).strip().upper()
+    return None
+
+
+def _bool_arg(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
+def _build_neuro_workspace_payload(args: dict[str, Any], *, prefer_proteas: bool = False) -> dict[str, Any] | None:
+    patient_id = _resolve_neuro_patient_id(args) or "P28"
+    data_root = args.get("data_root")
+    compact = _bool_arg(args.get("compact"), default=True)
+    materialize_assets = _bool_arg(args.get("materialize_assets"), default=True)
+
+    if prefer_proteas or data_root or os.getenv(DEFAULT_NEURO_DATA_ENV):
+        try:
+            workspace = build_neuro_longitudinal_workspace(
+                data_root=data_root,
+                patient_id=patient_id,
+                materialize_assets=materialize_assets,
+            )
+            return summarize_neuro_longitudinal_workspace(workspace) if compact else workspace.model_dump()
+        except Exception:
+            return None
+    return None
 
 
 class WorkflowCatalogTool:
@@ -31,7 +79,7 @@ class WorkflowCatalogTool:
 
 class NeuroWorkspaceTool:
     name = "get_neuro_workspace"
-    description = "Return the current neuro longitudinal review workspace, patient summary, trend metrics, and report state."
+    description = "Return the current neuro longitudinal review workspace, including treatment-aligned MRI timeline, lesion burden trend, and the current physician brief."
     parameters = {
         "case_id": {
             "type": "string",
@@ -42,19 +90,486 @@ class NeuroWorkspaceTool:
     cacheable = True
 
     async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload(args, prefer_proteas=False)
+        if payload is not None:
+            return ToolResult(success=True, output=json.dumps(payload, indent=2))
+
         case_id = args.get("case_id") or demo_workspace_store.snapshot()["default_case_id"]
-        payload = demo_workspace_store.get_case(case_id)
+        workspace = demo_workspace_store.get_case(case_id)
         compact = {
-            "id": payload["id"],
-            "title": payload["title"],
-            "patient": payload["patient"],
-            "analysis": payload["analysis"],
+            "id": workspace["id"],
+            "title": workspace["title"],
+            "patient": workspace["patient"],
+            "analysis": workspace["analysis"],
             "report": {
-                "title": payload["report"]["title"],
-                "summary": payload["report"]["summary"],
-                "risk_level": payload["report"]["risk_level"],
+                "title": workspace["report"]["title"],
+                "summary": workspace["report"]["summary"],
+                "risk_level": workspace["report"]["risk_level"],
             },
-            "timeline": payload["timeline"],
+            "timeline": workspace["timeline"],
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
+
+
+class DicomSeriesSelectorTool:
+    name = "dicom_series_selector"
+    description = "Select the preferred longitudinal MRI series for a neuro review case and summarize the chosen sequence family at each timepoint."
+    parameters = {
+        "case_id": {
+            "type": "string",
+            "description": "Optional neuro case id. Defaults to the current longitudinal neuro demo case.",
+            "required": False,
+        }
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            case_id = args.get("case_id") or demo_workspace_store.snapshot()["default_case_id"]
+            payload = demo_workspace_store.get_case(case_id)
+        case_id = payload["id"]
+        series = [
+            {
+                "timepoint": item["timepoint"],
+                "study_date": item["study_date"],
+                "preferred_sequence": item.get("sequence") or next(
+                    (series["modality"] for series in item.get("series", []) if series.get("modality") == "T1C"),
+                    "T1C",
+                ),
+                "source_type": item.get("source_type", ""),
+            }
+            for item in payload["timeline"]
+        ]
+        return ToolResult(success=True, output=json.dumps({"case_id": case_id, "series": series}, indent=2))
+
+
+class BrainMetResponseTrackerTool:
+    name = "brain_met_response_tracker"
+    description = "Return the longitudinal lesion response metrics for a neuro review case, including burden trend and recent interval change."
+    parameters = {
+        "case_id": {
+            "type": "string",
+            "description": "Optional neuro case id. Defaults to the current longitudinal neuro demo case.",
+            "required": False,
+        }
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            case_id = args.get("case_id") or demo_workspace_store.snapshot()["default_case_id"]
+            payload = demo_workspace_store.get_case(case_id)
+        case_id = payload["id"]
+        analysis = payload["analysis"]
+        points = [
+            {
+                "timepoint": item["timepoint"],
+                "study_date": item["study_date"],
+                "lesion_volume_ml": item["lesion_volume_ml"],
+                "tumor_volume_ml": item.get("tumor_volume_ml"),
+                "all_volume_ml": item.get("all_volume_ml"),
+                "oedema_volume_ml": item.get("oedema_volume_ml"),
+                "percent_change_from_baseline": item.get("cumulative_change_pct") or item.get("percent_change_from_baseline"),
+                "percent_change_from_prior": item.get("interval_change_pct") or item.get("percent_change_from_prior"),
+                "source_type": item.get("source_type"),
+            }
+            for item in payload["timeline"]
+        ]
+        compact = {
+            "case_id": case_id,
+            "risk_level": analysis.get("risk_level"),
+            "risk_reason": analysis.get("risk_reason"),
+            "baseline_total_ml": analysis.get("baseline_total_ml", analysis.get("baseline_volume_ml")),
+            "latest_total_ml": analysis.get("latest_total_ml", analysis.get("latest_volume_ml")),
+            "recent_segment_pct": analysis.get("recent_segment_pct", analysis.get("recent_interval_change_pct")),
+            "delta_pct": analysis.get("delta_pct", analysis.get("cumulative_change_pct")),
+            "points": points,
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
+
+
+class RTTimelineAlignerTool:
+    name = "rt_timeline_aligner"
+    description = "Return a treatment-aligned timeline for the neuro review case, anchoring serial MRI studies to the radiotherapy event."
+    parameters = {
+        "case_id": {
+            "type": "string",
+            "description": "Optional neuro case id. Defaults to the current longitudinal neuro demo case.",
+            "required": False,
+        }
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            case_id = args.get("case_id") or demo_workspace_store.snapshot()["default_case_id"]
+            payload = demo_workspace_store.get_case(case_id)
+        case_id = payload["id"]
+        events = payload.get("workflow", {}).get("events", [])
+        rt_date = next((event.get("date") for event in events if event.get("label") == "Radiotherapy"), "N/A")
+        timeline = [
+            {
+                "label": "Radiotherapy event",
+                "date": rt_date,
+                "type": "treatment",
+            }
+        ]
+        timeline.extend(
+            {
+                "label": item["timepoint"],
+                "date": item["study_date"],
+                "type": "imaging",
+                "sequence": item["sequence"],
+            }
+            for item in payload["timeline"]
+        )
+        return ToolResult(success=True, output=json.dumps({"case_id": case_id, "timeline": timeline}, indent=2))
+
+
+class SlicePreviewRendererTool:
+    name = "slice_preview_renderer"
+    description = "Return the current preview image payload for the neuro review case, including caption and display title."
+    parameters = {
+        "case_id": {
+            "type": "string",
+            "description": "Optional neuro case id. Defaults to the current longitudinal neuro demo case.",
+            "required": False,
+        }
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            case_id = args.get("case_id") or demo_workspace_store.snapshot()["default_case_id"]
+            payload = demo_workspace_store.get_case(case_id)
+        case_id = payload["id"]
+        compact = {
+            "case_id": case_id,
+            "preview": payload["imaging_preview"],
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
+
+
+class LesionTrendPlotterTool:
+    name = "lesion_trend_plotter"
+    description = "Return the visual trend payload and headline metrics for a longitudinal neuro-oncology case."
+    parameters = {
+        "patient_id": {"type": "string", "description": "Optional PROTEAS patient id such as P28.", "required": False},
+        "data_root": {"type": "string", "description": "Optional PROTEAS data root.", "required": False},
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(success=False, output="", error=f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root.")
+        return ToolResult(
+            success=True,
+            output=json.dumps(
+                {
+                    "id": payload.get("id"),
+                    "trend_svg": payload.get("visualizations", {}).get("trend_svg"),
+                    "baseline_volume_ml": payload.get("analysis", {}).get("baseline_volume_ml"),
+                    "latest_volume_ml": payload.get("analysis", {}).get("latest_volume_ml"),
+                    "cumulative_change_pct": payload.get("analysis", {}).get("cumulative_change_pct"),
+                    "risk_level": payload.get("analysis", {}).get("risk_level"),
+                },
+                indent=2,
+            ),
+        )
+
+
+class TreatmentEventTimelineRendererTool:
+    name = "treatment_event_timeline_renderer"
+    description = "Return the treatment-aligned timeline visual and recorded clinical events for a longitudinal neuro case."
+    parameters = {
+        "patient_id": {"type": "string", "description": "Optional PROTEAS patient id such as P28.", "required": False},
+        "data_root": {"type": "string", "description": "Optional PROTEAS data root.", "required": False},
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(success=False, output="", error=f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root.")
+        return ToolResult(
+            success=True,
+            output=json.dumps(
+                {
+                    "id": payload.get("id"),
+                    "timeline_svg": payload.get("visualizations", {}).get("timeline_svg"),
+                    "events": payload.get("workflow", {}).get("events", []),
+                    "timepoints": [
+                        {"timepoint": item.get("timepoint"), "study_date": item.get("study_date")}
+                        for item in payload.get("timeline", [])
+                    ],
+                },
+                indent=2,
+            ),
+        )
+
+
+class KeySliceSelectorTool:
+    name = "key_slice_selector"
+    description = "Return the key longitudinal checkpoints selected for representative comparison in a neuro longitudinal case."
+    parameters = {
+        "patient_id": {"type": "string", "description": "Optional PROTEAS patient id such as P28.", "required": False},
+        "data_root": {"type": "string", "description": "Optional PROTEAS data root.", "required": False},
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(success=False, output="", error=f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root.")
+        timeline = payload.get("timeline", [])
+        if not timeline:
+            selected = []
+        else:
+            selected = [timeline[0], timeline[len(timeline) // 2], timeline[-1]]
+        return ToolResult(
+            success=True,
+            output=json.dumps(
+                {
+                    "id": payload.get("id"),
+                    "selected_timepoints": [
+                        {
+                            "timepoint": item.get("timepoint"),
+                            "study_date": item.get("study_date"),
+                            "lesion_volume_ml": item.get("lesion_volume_ml"),
+                            "mask_member": item.get("mask_member"),
+                        }
+                        for item in selected
+                    ],
+                },
+                indent=2,
+            ),
+        )
+
+
+class OverlayComposerTool:
+    name = "overlay_composer"
+    description = "Return the representative preview payload and mask references used for neuro image comparison."
+    parameters = {
+        "patient_id": {"type": "string", "description": "Optional PROTEAS patient id such as P28.", "required": False},
+        "data_root": {"type": "string", "description": "Optional PROTEAS data root.", "required": False},
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(success=False, output="", error=f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root.")
+        return ToolResult(
+            success=True,
+            output=json.dumps(
+                {
+                    "id": payload.get("id"),
+                    "imaging_preview": payload.get("imaging_preview", {}),
+                    "comparison_svg": payload.get("visualizations", {}).get("comparison_svg"),
+                },
+                indent=2,
+            ),
+        )
+
+
+class LongitudinalComparisonPanelBuilderTool:
+    name = "longitudinal_comparison_panel_builder"
+    description = "Return the compact baseline-midpoint-latest comparison panel payload for a longitudinal neuro case."
+    parameters = {
+        "patient_id": {"type": "string", "description": "Optional PROTEAS patient id such as P28.", "required": False},
+        "data_root": {"type": "string", "description": "Optional PROTEAS data root.", "required": False},
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(success=False, output="", error=f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root.")
+        timeline = payload.get("timeline", [])
+        selected = [timeline[0], timeline[len(timeline) // 2], timeline[-1]] if timeline else []
+        return ToolResult(
+            success=True,
+            output=json.dumps(
+                {
+                    "id": payload.get("id"),
+                    "comparison_svg": payload.get("visualizations", {}).get("comparison_svg"),
+                    "panels": [
+                        {
+                            "timepoint": item.get("timepoint"),
+                            "study_date": item.get("study_date"),
+                            "lesion_volume_ml": item.get("lesion_volume_ml"),
+                            "tumor_volume_ml": item.get("tumor_volume_ml"),
+                        }
+                        for item in selected
+                    ],
+                },
+                indent=2,
+            ),
+        )
+
+
+class RiskSignalRendererTool:
+    name = "risk_signal_renderer"
+    description = "Return the compact headline risk signal used in the neuro longitudinal review."
+    parameters = {
+        "patient_id": {"type": "string", "description": "Optional PROTEAS patient id such as P28.", "required": False},
+        "data_root": {"type": "string", "description": "Optional PROTEAS data root.", "required": False},
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(success=False, output="", error=f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root.")
+        analysis = payload.get("analysis", {})
+        return ToolResult(
+            success=True,
+            output=json.dumps(
+                {
+                    "id": payload.get("id"),
+                    "risk_level": analysis.get("risk_level"),
+                    "response_label": analysis.get("response_label"),
+                    "risk_reason": analysis.get("risk_reason"),
+                    "baseline_volume_ml": analysis.get("baseline_volume_ml"),
+                    "latest_volume_ml": analysis.get("latest_volume_ml"),
+                    "recent_interval_change_pct": analysis.get("recent_interval_change_pct"),
+                    "annualized_change_pct": analysis.get("annualized_change_pct"),
+                },
+                indent=2,
+            ),
+        )
+
+
+class NeuroLongitudinalWorkspaceTool:
+    name = "get_neuro_longitudinal_workspace"
+    description = "Return a PROTEAS-backed longitudinal neuro-oncology workspace with timeline, response tracking, report, and visualizations."
+    parameters = {
+        "patient_id": {
+            "type": "string",
+            "description": "Optional PROTEAS patient id such as P28. Defaults to the main local longitudinal case.",
+            "required": False,
+        },
+        "data_root": {
+            "type": "string",
+            "description": "Optional PROTEAS data root. Defaults to the configured local longitudinal data root.",
+            "required": False,
+        },
+        "compact": {
+            "type": "boolean",
+            "description": "Return the compact presentation payload instead of the full workspace object.",
+            "required": False,
+        },
+        "materialize_assets": {
+            "type": "boolean",
+            "description": "Write SVG visualization assets to the local derived output directory.",
+            "required": False,
+        },
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload(args, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root to use the PROTEAS-backed neuro longitudinal workspace."
+                ),
+            )
+        return ToolResult(success=True, output=json.dumps(payload, indent=2))
+
+
+class NeuroLongitudinalVisualsTool:
+    name = "get_neuro_longitudinal_visuals"
+    description = "Return the SVG trend, timeline, and comparison visuals for the longitudinal neuro-oncology workspace."
+    parameters = {
+        "patient_id": {
+            "type": "string",
+            "description": "Optional PROTEAS patient id such as P28.",
+            "required": False,
+        },
+        "data_root": {
+            "type": "string",
+            "description": "Optional PROTEAS data root.",
+            "required": False,
+        },
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root to render the longitudinal neuro visuals."
+                ),
+            )
+        visualizations = payload.get("visualizations", {})
+        output_root = payload.get("source", {}).get("output_root")
+        patient_id = str(args.get("patient_id") or args.get("case_id") or payload.get("source", {}).get("patient_id") or "P28").strip().upper()
+        asset_root = str(
+            Path(output_root)
+            if output_root
+            else REPO_ROOT / ".clinicalclaw" / "derived" / "neuro_longitudinal" / patient_id
+        )
+        compact = {
+            "id": payload.get("id"),
+            "title": payload.get("title"),
+            "dataset": payload.get("dataset"),
+            "risk_level": payload.get("analysis", {}).get("risk_level"),
+            "visualizations": visualizations,
+            "asset_paths": {
+                "trend_svg": f"{asset_root}/trend.svg",
+                "timeline_svg": f"{asset_root}/timeline.svg",
+                "comparison_svg": f"{asset_root}/comparison.svg",
+            },
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
+
+
+class NeuroLongitudinalSeriesCatalogTool:
+    name = "get_neuro_longitudinal_series_catalog"
+    description = "Return the series catalog and timepoint alignment for a PROTEAS-backed neuro longitudinal case."
+    parameters = {
+        "patient_id": {
+            "type": "string",
+            "description": "Optional PROTEAS patient id such as P28.",
+            "required": False,
+        },
+        "data_root": {
+            "type": "string",
+            "description": "Optional PROTEAS data root.",
+            "required": False,
+        },
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root to inspect the longitudinal series catalog."
+                ),
+            )
+        compact = {
+            "id": payload.get("id"),
+            "title": payload.get("title"),
+            "patient": payload.get("patient"),
+            "analysis": payload.get("analysis", {}),
+            "timeline": payload.get("timeline", []),
+            "series_catalog": payload.get("series_catalog", []),
+            "radiomics": payload.get("radiomics", {}),
         }
         return ToolResult(success=True, output=json.dumps(compact, indent=2))
 
@@ -302,7 +817,7 @@ async def route_with_llm(llm: LLMProvider, message: str) -> dict[str, Any]:
         "User request:\n"
         f"{message}\n\n"
         "Workflow boundaries:\n"
-        "- neuro_longitudinal: MRI, hippocampus, atrophy, trend, longitudinal imaging report\n"
+        "- neuro_longitudinal: brain MRI follow-up, longitudinal tumor review, brain metastasis response, treatment response, progression, tumor-board brief\n"
         "- findings_closure: critical lab, positive result follow-up, actionable report finding, abnormal pap, suspicious nodule\n"
         "- queue_triage: referral urgency, queue reprioritization, post-discharge follow-up triage, same-day review, outreach queue\n"
         "- missed_diagnosis_detection: missed fracture workup, vertebral fracture gap, unrecognized condition, undiagnosed condition\n"
@@ -395,6 +910,19 @@ def build_console_agent(llm: LLMProvider):
         DiagnosisWorkspaceTool(),
         ScreeningWorkspaceTool(),
         NeuroWorkspaceTool(),
+        NeuroLongitudinalWorkspaceTool(),
+        NeuroLongitudinalVisualsTool(),
+        NeuroLongitudinalSeriesCatalogTool(),
+        DicomSeriesSelectorTool(),
+        BrainMetResponseTrackerTool(),
+        RTTimelineAlignerTool(),
+        SlicePreviewRendererTool(),
+        LesionTrendPlotterTool(),
+        TreatmentEventTimelineRendererTool(),
+        KeySliceSelectorTool(),
+        OverlayComposerTool(),
+        LongitudinalComparisonPanelBuilderTool(),
+        RiskSignalRendererTool(),
         SafetyQueueTool(),
         SafetyCaseTool(),
         SafetyKnowledgeSearchTool(),
@@ -410,7 +938,7 @@ def build_console_agent(llm: LLMProvider):
         "If the workflow is queue_triage, also load queue_triage_presenter. "
         "If the workflow is missed_diagnosis_detection, also load missed_diagnosis_presenter. "
         "If the workflow is screening_gap_closure, also load screening_gap_presenter. "
-        "If the workflow is neuro_longitudinal, also load neuro_report_presenter. "
+        "If the workflow is neuro_longitudinal, also load neuro_report_presenter and use the longitudinal neuro tools to inspect series selection, risk signal, trend, timeline, and preview assets. "
         "If the workflow is radiation_safety_monitor, also load safety_brief_presenter. "
         "Silently organize your facts before writing, but never reveal hidden planning or chain-of-thought. "
         "For neuro requests, inspect the neuro workspace before answering. "
@@ -442,6 +970,19 @@ def build_console_agent(llm: LLMProvider):
         "get_diagnosis_workspace",
         "get_screening_workspace",
         "get_neuro_workspace",
+        "get_neuro_longitudinal_workspace",
+        "get_neuro_longitudinal_visuals",
+        "get_neuro_longitudinal_series_catalog",
+        "dicom_series_selector",
+        "brain_met_response_tracker",
+        "rt_timeline_aligner",
+        "slice_preview_renderer",
+        "lesion_trend_plotter",
+        "treatment_event_timeline_renderer",
+        "key_slice_selector",
+        "overlay_composer",
+        "longitudinal_comparison_panel_builder",
+        "risk_signal_renderer",
         "get_safety_queue",
         "get_safety_case",
         "search_safety_knowledge",
@@ -501,9 +1042,9 @@ def build_routed_task(route: dict[str, Any], message: str) -> str:
             "Required pre-answer tool calls:\n"
             "1. use_skill(name='clinical_report_presentation')\n"
             "2. use_skill(name='neuro_report_presenter')\n"
-            "Use the neuro workspace tools to inspect the longitudinal MRI case before answering.\n"
-            "Present the final answer as a polished clinician-facing markdown brief with sections for MRI Trend Analysis, "
-            "Draft Physician Summary, Recommendations, and a one-line Risk Tier.\n"
+            "Use the neuro longitudinal workspace tools to inspect the case before answering.\n"
+            "Present the final answer as a polished clinician-facing markdown brief with sections for Timeline, "
+            "Trend Interpretation, Imaging Context, Recommendations, and a one-line Risk Tier.\n"
             f"User request: {message}"
         )
     if workflow_id == "radiation_safety_monitor":

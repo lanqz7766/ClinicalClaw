@@ -75,12 +75,27 @@ WORKFLOWS = [
         "id": "neuro_longitudinal",
         "title": "Neuro Longitudinal Review",
         "module": "neuro",
-        "summary": "Longitudinal MRI review for hippocampal atrophy trend analysis, report generation, and review.",
-        "tools": ["ehr_timeline_loader", "mri_series_selector", "volume_trend_analyzer", "report_generator"],
-        "tags": ["brain", "mri", "atrophy", "report"],
+        "summary": "Longitudinal neuro-oncology review that aligns serial MRI, treatment timing, lesion burden trend, and a concise physician brief.",
+        "tools": [
+            "neuro_longitudinal_workspace",
+            "dicom_series_selector",
+            "neuro_longitudinal_visuals",
+            "lesion_trend_plotter",
+            "treatment_event_timeline_renderer",
+            "key_slice_selector",
+            "overlay_composer",
+            "longitudinal_comparison_panel_builder",
+            "risk_signal_renderer",
+            "neuro_longitudinal_series_catalog",
+            "brain_met_response_tracker",
+            "rt_timeline_aligner",
+            "slice_preview_renderer",
+            "neuro_oncology_brief_presenter",
+        ],
+        "tags": ["brain", "mri", "brain-met", "response", "longitudinal", "report"],
         "examples": [
-            "Compare this longitudinal MRI trend and draft a physician report.",
-            "Is there accelerated hippocampal atrophy in this case?",
+            "Compare this longitudinal brain MRI follow-up and draft a physician report.",
+            "Does the latest follow-up suggest treatment response or concerning progression?",
         ],
     },
     {
@@ -150,7 +165,25 @@ ROUTING_KEYWORDS = {
         "overdue screening",
         "care gap",
     },
-    "neuro": {"mri", "brain", "hippocampus", "atrophy", "neuro", "longitudinal", "report", "volume", "trend"},
+    "neuro": {
+        "mri",
+        "brain",
+        "brain metast",
+        "metastasis",
+        "brain met",
+        "t1c",
+        "flair",
+        "response",
+        "progression",
+        "post-radiotherapy",
+        "post radiotherapy",
+        "longitudinal",
+        "neuro",
+        "report",
+        "volume",
+        "trend",
+        "tumor board",
+    },
     "safety": {
         "incident",
         "safety",
@@ -180,7 +213,7 @@ def console_snapshot() -> dict[str, Any]:
         "title": "ClinicalClaw Console",
         "tagline": "General clinical command center with workflow-specific modules.",
         "quick_prompts": [
-            "Review this MRI trend and draft a physician summary.",
+            "Review this post-radiotherapy brain MRI trend and draft a physician summary.",
             "Should this referral move into an urgent queue today?",
             "Does this positive FIT still need colonoscopy follow-up?",
             "Check whether this radiotherapy case resembles a known failure pattern.",
@@ -391,7 +424,7 @@ def route_general_query(message: str) -> dict[str, Any]:
             "assistant": {
                 "content": (
                     "I routed this request to the Neuro Longitudinal Review module. The best next step is to "
-                    "load the longitudinal MRI case, run the volume trend analyzer, and refresh the physician-facing report."
+                    "load the longitudinal MRI case, align treatment timing, review lesion-burden change, and refresh the physician-facing brief."
                 )
             },
             "workflow": workflow,
@@ -426,7 +459,7 @@ def route_general_query(message: str) -> dict[str, Any]:
                 "I can route requests into workflow-specific modules. Try a findings question about critical results or "
                 "follow-up closure, a queue question about referrals or post-discharge follow-up, a diagnosis-gap question "
                 "about missed fractures or unrecognized conditions, a screening question about open preventive or diagnostic "
-                "follow-up, a neuro question about longitudinal MRI change, or a safety question about incident patterns."
+                "follow-up, a neuro question about longitudinal brain MRI change, or a safety question about incident patterns."
             )
         },
         "workflow": workflow,

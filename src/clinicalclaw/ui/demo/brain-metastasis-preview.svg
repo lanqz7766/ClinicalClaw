@@ -1,0 +1,63 @@
+<svg width="800" height="520" viewBox="0 0 800 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="70" y1="40" x2="720" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#081521"/>
+      <stop offset="1" stop-color="#132A3D"/>
+    </linearGradient>
+    <linearGradient id="brainGlow" x1="400" y1="140" x2="400" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EAF2F8"/>
+      <stop offset="1" stop-color="#C8D7E3"/>
+    </linearGradient>
+    <linearGradient id="lesionGlow" x1="290" y1="210" x2="510" y2="320" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E95D73"/>
+      <stop offset="1" stop-color="#C23C57"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="800" height="520" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000000" flood-opacity="0.34" />
+    </filter>
+  </defs>
+
+  <rect width="800" height="520" rx="36" fill="url(#bg)" />
+  <circle cx="660" cy="98" r="92" fill="#1B3B55" opacity="0.44" />
+  <circle cx="116" cy="424" r="118" fill="#0E2333" opacity="0.64" />
+
+  <g filter="url(#shadow)">
+    <ellipse cx="398" cy="258" rx="268" ry="186" fill="url(#brainGlow)" />
+    <ellipse cx="398" cy="258" rx="228" ry="146" fill="#F7FBFE" opacity="0.88" />
+    <path d="M274 170C312 144 355 131 399 131C443 131 486 144 524 170" stroke="#9BB0C0" stroke-width="16" stroke-linecap="round" />
+    <path d="M274 346C312 372 355 385 399 385C443 385 486 372 524 346" stroke="#9BB0C0" stroke-width="16" stroke-linecap="round" />
+    <path d="M256 220C279 194 315 174 352 170C374 168 386 182 398 194C411 181 427 168 450 170C486 174 522 194 545 220" stroke="#B8C8D5" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M258 304C281 330 316 348 352 352C374 354 387 339 398 327C409 339 425 354 448 352C484 348 520 330 543 304" stroke="#B8C8D5" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+    <ellipse cx="338" cy="250" rx="72" ry="50" fill="#DDE9F2" opacity="0.55" />
+    <ellipse cx="458" cy="250" rx="72" ry="50" fill="#DDE9F2" opacity="0.55" />
+    <ellipse cx="338" cy="250" rx="44" ry="32" fill="#E95D73" opacity="0.92" />
+    <ellipse cx="458" cy="250" rx="44" ry="32" fill="#E95D73" opacity="0.92" />
+    <circle cx="338" cy="250" r="14" fill="#C23C57" />
+    <circle cx="458" cy="250" r="14" fill="#C23C57" />
+    <ellipse cx="398" cy="258" rx="176" ry="104" stroke="#D3DEE8" stroke-width="3" opacity="0.8" />
+  </g>
+
+  <g>
+    <rect x="78" y="70" width="172" height="58" rx="18" fill="#FFFFFF" fill-opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.14" />
+    <text x="94" y="100" fill="#F7FBFE" font-family="Manrope, sans-serif" font-size="18" font-weight="700">Longitudinal MRI review</text>
+    <text x="94" y="118" fill="#AFC1CF" font-family="Manrope, sans-serif" font-size="12">Representative follow-up slice</text>
+
+    <rect x="566" y="58" width="156" height="92" rx="20" fill="#FFFFFF" fill-opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.14" />
+    <text x="586" y="91" fill="#F7FBFE" font-family="Manrope, sans-serif" font-size="15" font-weight="700">Signal</text>
+    <text x="586" y="119" fill="#E95D73" font-family="Manrope, sans-serif" font-size="30" font-weight="800">Alert</text>
+    <text x="586" y="137" fill="#AFC1CF" font-family="Manrope, sans-serif" font-size="12">trend and comparison ready</text>
+  </g>
+
+  <g>
+    <rect x="116" y="418" width="568" height="54" rx="18" fill="#FFFFFF" fill-opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.12" />
+    <line x1="150" y1="445" x2="630" y2="445" stroke="#7F95A8" stroke-width="2" stroke-dasharray="4 7" />
+    <circle cx="182" cy="445" r="7" fill="#0D6AB8" />
+    <circle cx="308" cy="445" r="7" fill="#0D6AB8" />
+    <circle cx="430" cy="445" r="7" fill="#0D6AB8" />
+    <circle cx="548" cy="445" r="8" fill="#C23C57" />
+    <text x="162" y="472" fill="#AFC1CF" font-family="Manrope, sans-serif" font-size="12">baseline</text>
+    <text x="285" y="472" fill="#AFC1CF" font-family="Manrope, sans-serif" font-size="12">follow-up</text>
+    <text x="404" y="472" fill="#AFC1CF" font-family="Manrope, sans-serif" font-size="12">interim</text>
+    <text x="517" y="472" fill="#F7FBFE" font-family="Manrope, sans-serif" font-size="12" font-weight="700">latest</text>
+  </g>
+</svg>

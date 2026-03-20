@@ -106,8 +106,9 @@ Screening gap closure:
 Neuro longitudinal review:
 
 - mounted inside `/demo`
-- focuses on longitudinal hippocampal trend analysis
-- includes a compact report layout, timeline, trend chart, and reviewer actions
+- supports a real local PROTEAS-backed neuro-oncology longitudinal review when `CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT` is configured
+- focuses on post-radiotherapy brain metastasis follow-up, treatment-aligned MRI review, and concise physician-facing summaries
+- includes radiomics-backed lesion trend tracking, RT-aligned timeline, representative imaging preview, and reviewer actions
 
 Radiation safety monitor:
 
@@ -203,6 +204,7 @@ Core platform:
 - `CLINICALCLAW_DATABASE_PATH`
 - `CLINICALCLAW_SCENARIO_DIR`
 - `CLINICALCLAW_ARTIFACT_DIR`
+- `CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT`
 
 SMART on FHIR:
 
@@ -281,6 +283,20 @@ Relevant docs:
 - [docs/workflow-engine.md](/Users/qlan/Documents/Agent/ClinicalClaw/docs/workflow-engine.md)
 - [docs/workflow-families.md](/Users/qlan/Documents/Agent/ClinicalClaw/docs/workflow-families.md)
 - [docs/neuro-environment.md](/Users/qlan/Documents/Agent/ClinicalClaw/docs/neuro-environment.md)
+
+## Real Local Neuro Demo
+
+The most polished current single-case demo is the neuro longitudinal module.
+
+When `CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT` points at a local PROTEAS dataset root, `/demo` switches from the fallback mock case to a real local longitudinal review. The current workflow uses:
+
+- DICOM series discovery for longitudinal MRI follow-up
+- radiomics-backed `T1C` tumor burden as the primary quantitative trend
+- radiotherapy event alignment on the clinical timeline
+- compact SVG visualizations for trend, timeline, and key comparisons
+- a concise neuro-oncology brief suitable for demo presentation and review
+
+This dataset path is intentionally local-only and must not be committed.
 
 ## Neuro Ingest Direction
 

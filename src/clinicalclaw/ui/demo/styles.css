@@ -140,16 +140,17 @@ body {
   align-items: center;
   gap: 10px;
   border-radius: 999px;
-  padding: 10px 14px;
-  border: 1px solid rgba(18, 37, 54, 0.06);
-  background: rgba(249, 252, 254, 0.68);
+  padding: 9px 13px;
+  border: 1px solid rgba(18, 37, 54, 0.05);
+  background: rgba(249, 252, 254, 0.52);
   backdrop-filter: blur(18px);
   color: var(--text);
   font: inherit;
   font-weight: 800;
+  font-size: 0.84rem;
   cursor: pointer;
   box-shadow: 0 8px 24px rgba(20, 42, 60, 0.04);
-  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 
 .brand-summary:hover,
@@ -159,6 +160,7 @@ body {
   background: rgba(255, 255, 255, 0.88);
   border-color: rgba(13, 106, 184, 0.12);
   transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(20, 42, 60, 0.08);
 }
 
 .brand-summary::-webkit-details-marker,
@@ -207,6 +209,16 @@ body {
   backdrop-filter: blur(22px);
   box-shadow: 0 22px 60px rgba(20, 42, 60, 0.12);
   z-index: 20;
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.topbar-flyout[open] > .flyout-panel {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
 }
 
 .brand-panel {
@@ -486,6 +498,177 @@ body {
   gap: 14px;
 }
 
+.neuro-layout {
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.neuro-content {
+  display: grid;
+  gap: 14px;
+}
+
+.neuro-hero-grid,
+.neuro-analysis-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.neuro-hero-grid {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+}
+
+.neuro-analysis-grid {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+}
+
+.neuro-signal-chip {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(18, 37, 54, 0.08);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 18px 36px rgba(20, 42, 60, 0.06);
+}
+
+.neuro-signal-chip .section-label {
+  font-size: 0.68rem;
+}
+
+.neuro-signal-chip strong {
+  font-size: 0.9rem;
+  letter-spacing: -0.02em;
+}
+
+.neuro-signal-chip small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.neuro-side-note {
+  background: linear-gradient(180deg, rgba(248, 251, 253, 0.92), rgba(255, 255, 255, 0.86));
+}
+
+.signal-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.signal-chip {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(18, 37, 54, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.signal-chip span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.signal-chip strong {
+  font-size: 0.98rem;
+}
+
+.compact-note {
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.attention-banner {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 231, 235, 0.96), rgba(255, 247, 249, 0.96));
+  border: 1px solid rgba(193, 69, 83, 0.12);
+}
+
+.attention-banner strong {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--red);
+}
+
+.attention-banner div {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.52;
+}
+
+.neuro-chart-card .chart-header {
+  margin-bottom: 10px;
+}
+
+.neuro-chart-card .chart-legend {
+  font-size: 0.78rem;
+}
+
+.neuro-chart-card .trend-chart {
+  margin-bottom: 12px;
+}
+
+.timeline-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 10px;
+}
+
+.timeline-node {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 10px 10px 10px 18px;
+  border-radius: 16px;
+  background: rgba(248, 251, 253, 0.94);
+  border: 1px solid rgba(18, 37, 54, 0.06);
+}
+
+.timeline-node strong {
+  font-size: 0.76rem;
+}
+
+.timeline-node small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: 9px;
+  top: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--blue);
+}
+
+.timeline-node.latest .timeline-dot {
+  background: var(--red);
+}
+
+.neuro-chat-card .chat-log {
+  max-height: 260px;
+}
+
+.neuro-workflow-card .workflow-steps {
+  gap: 10px;
+}
+
+.neuro-report-card .report-sections {
+  grid-template-columns: 1fr;
+}
+
 .module-rail,
 .module-content,
 .case-list,
@@ -555,7 +738,41 @@ body {
   display: grid;
   gap: 8px;
   line-height: 1.58;
-  font-size: 0.92rem;
+  font-size: 0.86rem;
+}
+
+.neuro-case-picker {
+  display: grid;
+  gap: 4px;
+  min-width: 190px;
+}
+
+.neuro-case-picker select {
+  appearance: none;
+  border: 1px solid rgba(18, 37, 54, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.divider-line {
+  width: 100%;
+  height: 1px;
+  background: rgba(18, 37, 54, 0.08);
+  margin: 4px 0 2px;
+}
+
+.upload-inline {
+  display: grid;
+  gap: 10px;
+}
+
+.compact-dropzone {
+  padding: 14px;
 }
 
 .chat-rich p,
@@ -965,6 +1182,39 @@ body {
   margin: 0;
 }
 
+.neuro-module .module-page-header h2 {
+  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+}
+
+.neuro-module .support-copy,
+.neuro-module .hint {
+  font-size: 0.88rem;
+}
+
+.neuro-module .metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.neuro-module .metric {
+  background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(247,250,252,0.9));
+}
+
+.neuro-module .metric-value {
+  font-size: 0.92rem;
+}
+
+.neuro-module .card.compact {
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,250,252,0.9));
+}
+
+.neuro-module .prompt-chip {
+  font-size: 0.82rem;
+}
+
+.neuro-module .chat-rich {
+  font-size: 0.9rem;
+}
+
 @media (max-width: 1180px) {
   .module-layout,
   .grid.two-col,
@@ -982,6 +1232,11 @@ body {
     gap: 12px;
   }
 
+  .neuro-hero-grid,
+  .neuro-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
   .composer-field {
     grid-template-columns: 1fr;
   }
@@ -996,6 +1251,10 @@ body {
   .workflow-grid,
   .workflow-grid.compact {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .signal-strip {
+    grid-template-columns: 1fr;
   }
 }
 

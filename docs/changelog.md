@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-03-20
+
+- Switched the neuro longitudinal demo from a hippocampal placeholder narrative to a real local PROTEAS-backed neuro-oncology review when `CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT` is configured.
+- Added PROTEAS neuro tooling for:
+  - `dicom_series_selector`
+  - `brain_met_response_tracker`
+  - `rt_timeline_aligner`
+  - `slice_preview_renderer`
+  - `lesion_trend_plotter`
+  - `treatment_event_timeline_renderer`
+  - `key_slice_selector`
+  - `overlay_composer`
+  - `longitudinal_comparison_panel_builder`
+  - `risk_signal_renderer`
+- Switched the primary neuro longitudinal quantitative signal to radiomics-derived `T1C` tumor `MeshVolume`, with tumor masks retained for preview and overlay support.
+- Fixed PROTEAS timepoint alignment so radiotherapy is rendered as a distinct event rather than being treated as an MRI follow-up timepoint.
+- Tightened the Neuro module UI into a more focused single-case demo layout with a compact case selector, lighter hero, simplified timeline, and shorter physician brief.
+- Added PROTEAS-specific regression tests covering workspace construction, demo workspace selection, and neuro tool availability.
+
 ## 2026-03-19
 
 - Added a fourth executable workflow family: `screening_gap_closure`, with the first workflow `screening_gap_positive_fit_followup`.

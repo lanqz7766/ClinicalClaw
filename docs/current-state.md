@@ -1,6 +1,6 @@
 # Current State
 
-Updated: 2026-03-19
+Updated: 2026-03-20
 
 ## Summary
 
@@ -119,6 +119,21 @@ Current screening gap family status:
 - de-identified demo cases are local-only
 - it is now exposed as a compact module in `/demo`
 
+Current neuro longitudinal demo status:
+
+- `/demo` now supports a real local PROTEAS-backed neuro-oncology case review when `CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT` is configured
+- the default real local demo case is currently `P28`
+- the quantitative trend now uses radiomics-derived `T1C` tumor `MeshVolume` as the primary burden signal
+- radiotherapy is aligned as a distinct event on the timeline instead of being treated as an imaging timepoint
+- tumor masks remain available for preview and overlay, but are no longer the primary headline metric
+- compact neuro tools now cover:
+  - series selection
+  - response tracking
+  - treatment-event alignment
+  - representative preview selection
+  - trend/timeline/comparison visual rendering
+  - compact risk signal generation
+
 ### Runtime Migration
 
 Phase 1 of runtime migration is now in place:
@@ -136,7 +151,8 @@ The repository is not yet fully physically migrated:
 
 ## What Is Still Prototype-Only
 
-- demo cases are currently mocked rather than driven by real OASIS-3 or site data
+- most workflow demos still use mocked or de-identified local demo cases
+- the neuro longitudinal module can now run on a real local PROTEAS dataset, but it is still a demo presentation path rather than a validated clinical product
 - neuro analysis is not yet connected to a real segmentation / volumetry toolchain
 - safety monitoring uses a local RO-ILS-inspired seed knowledge base rather than site-specific incident history
 - email escalation is still mock escalation
