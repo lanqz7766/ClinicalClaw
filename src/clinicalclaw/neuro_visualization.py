@@ -98,7 +98,7 @@ def _fallback_volume_bounds(volume: np.ndarray) -> tuple[tuple[int, int], tuple[
 def _expand_bounds(
     bounds: tuple[tuple[int, int], tuple[int, int], tuple[int, int]],
     shape: tuple[int, int, int],
-    padding: tuple[int, int, int] = (28, 28, 16),
+    padding: tuple[int, int, int] = (40, 40, 18),
 ) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
     expanded: list[tuple[int, int]] = []
     for idx, (start, end) in enumerate(bounds):
@@ -107,14 +107,47 @@ def _expand_bounds(
     return tuple(expanded)
 
 
+def _square_inplane_bounds(
+    bounds: tuple[tuple[int, int], tuple[int, int], tuple[int, int]],
+    shape: tuple[int, int, int],
+    *,
+    min_size: int = 176,
+) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
+    x_bounds, y_bounds, z_bounds = bounds
+    x_center = (x_bounds[0] + x_bounds[1]) / 2
+    y_center = (y_bounds[0] + y_bounds[1]) / 2
+    side = max(x_bounds[1] - x_bounds[0], y_bounds[1] - y_bounds[0], min_size)
+
+    def _axis_window(center: float, axis_size: int) -> tuple[int, int]:
+        if side >= axis_size:
+            return (0, axis_size)
+        start = int(round(center - side / 2))
+        end = start + int(side)
+        if start < 0:
+            end -= start
+            start = 0
+        if end > axis_size:
+            start -= end - axis_size
+            end = axis_size
+        start = max(start, 0)
+        end = min(end, axis_size)
+        return (start, end)
+
+    return (
+        _axis_window(x_center, shape[0]),
+        _axis_window(y_center, shape[1]),
+        z_bounds,
+    )
+
+
 def _focus_crop_arrays(
     volume: np.ndarray,
     mask: np.ndarray | None = None,
-    padding: tuple[int, int, int] = (28, 28, 16),
+    padding: tuple[int, int, int] = (40, 40, 18),
 ) -> tuple[np.ndarray, np.ndarray | None, tuple[tuple[int, int], tuple[int, int], tuple[int, int]]]:
     shape = tuple(int(value) for value in volume.shape[:3])
     base_bounds = _mask_bounds(mask) or _fallback_volume_bounds(volume)
-    bounds = _expand_bounds(base_bounds, shape, padding=padding)
+    bounds = _square_inplane_bounds(_expand_bounds(base_bounds, shape, padding=padding), shape)
     slices = tuple(slice(start, end) for start, end in bounds)
     cropped_volume = volume[slices]
     cropped_mask = mask[slices] if mask is not None else None
@@ -199,20 +232,64 @@ def _mask_to_overlay(mask: np.ndarray, index: int) -> Image.Image:
     return overlay
 
 
-def _save_preview_pair(volume_path: Path, mask_path: Path | None, output_dir: Path, stem: str) -> dict[str, Any]:
+def _contain_image(
+    image: Image.Image,
+    size: tuple[int, int] = (320, 320),
+    background: tuple[int, int, int, int] = (12, 18, 24, 255),
+) -> Image.Image:
+    canvas = Image.new("RGBA", size, background)
+    contained = image.copy()
+    contained.thumbnail(size, Image.Resampling.LANCZOS)
+    offset = ((size[0] - contained.width) // 2, (size[1] - contained.height) // 2)
+    canvas.alpha_composite(contained, offset)
+    return canvas
+
+
+def _merge_bounds(
+    bounds_list: list[tuple[tuple[int, int], tuple[int, int], tuple[int, int]]],
+    shape: tuple[int, int, int],
+    padding: tuple[int, int, int] = (40, 40, 18),
+) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
+    if not bounds_list:
+        return tuple((0, int(shape[idx])) for idx in range(3))
+    merged: list[tuple[int, int]] = []
+    for axis in range(3):
+        axis_min = min(bounds[axis][0] for bounds in bounds_list)
+        axis_max = max(bounds[axis][1] for bounds in bounds_list)
+        merged.append((axis_min, axis_max))
+    return _square_inplane_bounds(_expand_bounds(tuple(merged), shape, padding=padding), shape)
+
+
+def _save_preview_pair(
+    volume_path: Path,
+    mask_path: Path | None,
+    output_dir: Path,
+    stem: str,
+    bounds: tuple[tuple[int, int], tuple[int, int], tuple[int, int]] | None = None,
+    slice_index_override: int | None = None,
+) -> dict[str, Any]:
     volume = _load_volume(volume_path)
     mask = _load_volume(mask_path) if mask_path and mask_path.exists() else None
-    cropped_volume, cropped_mask, _ = _focus_crop_arrays(volume, mask)
-    slice_index = _select_axial_index(cropped_volume, cropped_mask)
+    if bounds is None:
+        cropped_volume, cropped_mask, bounds = _focus_crop_arrays(volume, mask)
+    else:
+        slices = tuple(slice(start, end) for start, end in bounds)
+        cropped_volume = volume[slices]
+        cropped_mask = mask[slices] if mask is not None else None
+    slice_index = (
+        int(np.clip(slice_index_override - bounds[2][0], 0, cropped_volume.shape[2] - 1))
+        if slice_index_override is not None
+        else _select_axial_index(cropped_volume, cropped_mask)
+    )
     base = _slice_to_image(cropped_volume, slice_index)
-    base = base.resize((320, 320), Image.Resampling.BILINEAR)
+    base = _contain_image(base)
     slice_path = output_dir / f"{stem}_slice.png"
     base.save(slice_path)
 
     overlay_path = None
     if cropped_mask is not None:
         overlay = _mask_to_overlay(cropped_mask, slice_index)
-        overlay = overlay.resize((320, 320), Image.Resampling.NEAREST)
+        overlay = _contain_image(overlay, background=(0, 0, 0, 0))
         composite = base.copy()
         composite.alpha_composite(overlay)
         overlay_path = output_dir / f"{stem}_overlay.png"
@@ -270,6 +347,10 @@ def build_neuro_visualization_bundle(
     manifest_volumes: list[dict[str, Any]] = []
     manifest_overlays: list[dict[str, Any]] = []
     comparison_panels: list[dict[str, Any]] = []
+    extracted_assets: list[dict[str, Any]] = []
+    shared_bounds_list: list[tuple[tuple[int, int], tuple[int, int], tuple[int, int]]] = []
+    shared_centers: list[int] = []
+    shared_shape: tuple[int, int, int] | None = None
 
     for item in selected:
         timepoint = _safe_text(item.get("timepoint"))
@@ -288,61 +369,93 @@ def build_neuro_visualization_bundle(
         except FileNotFoundError:
             mask_path = None
 
-        preview = _save_preview_pair(image_path, mask_path, target_dir, f"{timepoint}_{primary_modality}")
+        volume = _load_volume(image_path)
+        mask = _load_volume(mask_path) if mask_path and mask_path.exists() else None
+        shared_shape = tuple(int(value) for value in volume.shape[:3])
+        local_bounds = _mask_bounds(mask) or _fallback_volume_bounds(volume)
+        shared_bounds_list.append(local_bounds)
+        if mask is not None and np.any(mask > 0):
+            coords = np.argwhere(mask > 0)
+            shared_centers.append(int(np.round(coords[:, 2].mean())))
+        extracted_assets.append(
+            {
+                "timepoint": timepoint,
+                "study_date": study_date,
+                "image_path": image_path,
+                "mask_path": mask_path,
+            }
+        )
+
+    shared_bounds = _merge_bounds(shared_bounds_list, shared_shape) if shared_shape and shared_bounds_list else None
+    shared_slice_index = int(np.round(np.mean(shared_centers))) if shared_centers else None
+
+    for asset in extracted_assets:
+        preview = _save_preview_pair(
+            asset["image_path"],
+            asset["mask_path"],
+            target_dir,
+            f"{asset['timepoint']}_{primary_modality}",
+            bounds=shared_bounds,
+            slice_index_override=shared_slice_index,
+        )
         preview_assets.append(
             NeuroSlicePreview(
-                timepoint=timepoint,
-                study_date=study_date,
+                timepoint=asset["timepoint"],
+                study_date=asset["study_date"],
                 modality=primary_modality.upper(),
-                image_path=str(image_path),
-                mask_path=str(mask_path) if mask_path else None,
+                image_path=str(asset["image_path"]),
+                mask_path=str(asset["mask_path"]) if asset["mask_path"] else None,
                 slice_path=str(preview["slice_path"]),
                 overlay_path=str(preview["overlay_path"]) if preview["overlay_path"] else None,
                 slice_index=int(preview["slice_index"]),
-                caption=_figure_caption(timepoint, primary_modality.upper(), bool(mask_path)),
+                caption=_figure_caption(asset["timepoint"], primary_modality.upper(), bool(asset["mask_path"])),
             )
         )
         manifest_volumes.append(
             {
-                "timepoint": timepoint,
-                "study_date": study_date,
+                "timepoint": asset["timepoint"],
+                "study_date": asset["study_date"],
                 "modality": primary_modality.upper(),
-                "volume_path": str(image_path),
-                "mask_path": str(mask_path) if mask_path else None,
-                "display_name": f"{timepoint} {primary_modality.upper()}",
+                "volume_path": str(asset["image_path"]),
+                "mask_path": str(asset["mask_path"]) if asset["mask_path"] else None,
+                "display_name": f"{asset['timepoint']} {primary_modality.upper()}",
             }
         )
-        if mask_path:
+        if asset["mask_path"]:
             manifest_overlays.append(
                 {
-                    "timepoint": timepoint,
-                    "study_date": study_date,
-                    "mask_path": str(mask_path),
+                    "timepoint": asset["timepoint"],
+                    "study_date": asset["study_date"],
+                    "mask_path": str(asset["mask_path"]),
                     "label": "Tumor mask",
                 }
             )
 
     if preview_assets:
-        first = preview_assets[0]
-        latest = preview_assets[-1]
-        comparison_panels.extend(
-            [
+        picked = [preview_assets[0]]
+        if len(preview_assets) > 2:
+            picked.append(preview_assets[len(preview_assets) // 2])
+        if len(preview_assets) > 1:
+            picked.append(preview_assets[-1])
+        seen: set[str] = set()
+        ordered_panels: list[NeuroSlicePreview] = []
+        for item in picked:
+            if item.timepoint in seen:
+                continue
+            seen.add(item.timepoint)
+            ordered_panels.append(item)
+        labels = ["Baseline", "Mid follow-up", "Latest"]
+        for index, item in enumerate(ordered_panels):
+            comparison_panels.append(
                 {
-                    "label": "Baseline",
-                    "timepoint": first.timepoint,
-                    "image_path": first.image_path,
-                    "overlay_path": first.overlay_path,
-                    "preview_path": first.overlay_path or first.slice_path,
-                },
-                {
-                    "label": "Latest",
-                    "timepoint": latest.timepoint,
-                    "image_path": latest.image_path,
-                    "overlay_path": latest.overlay_path,
-                    "preview_path": latest.overlay_path or latest.slice_path,
-                },
-            ]
-        )
+                    "label": labels[min(index, len(labels) - 1)],
+                    "timepoint": item.timepoint,
+                    "image_path": item.image_path,
+                    "overlay_path": item.overlay_path,
+                    "preview_path": item.overlay_path or item.slice_path,
+                    "study_date": item.study_date,
+                }
+            )
 
     manifest = {
         "viewer": "niivue",

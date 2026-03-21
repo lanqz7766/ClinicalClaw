@@ -892,37 +892,67 @@ body {
   color: var(--blue);
 }
 
-.viewer-stage {
-  position: relative;
-  min-height: 340px;
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(13, 106, 184, 0.05), rgba(18, 37, 54, 0.02));
-  border: 1px solid rgba(18, 37, 54, 0.07);
+.compact-toolbar {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.privacy-note {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.comparison-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.comparison-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.comparison-panel-head strong {
+  font-size: 0.77rem;
+  letter-spacing: -0.02em;
+}
+
+.comparison-panel-head span,
+.comparison-caption {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.comparison-frame,
+.comparison-empty {
+  aspect-ratio: 1 / 1;
+  border-radius: 18px;
+  background: rgba(8, 14, 22, 0.94);
+  border: 1px solid rgba(18, 37, 54, 0.08);
   overflow: hidden;
 }
 
-.viewer-canvas,
-.preview-image {
-  position: absolute;
-  inset: 0;
+.comparison-image,
+.comparison-empty img {
   width: 100%;
   height: 100%;
-  min-height: 340px;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 10px;
 }
 
-.viewer-canvas {
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-
-.viewer-canvas.active {
-  opacity: 1;
-}
-
-.viewer-fallback.hidden {
-  display: none;
+.comparison-caption {
+  margin: 0;
 }
 
 .neuro-case-picker select {
@@ -1228,17 +1258,9 @@ body {
 .legend-teal { background: var(--teal); }
 .legend-slate { background: var(--slate); }
 
-.trend-chart,
-.preview-image {
+.trend-chart {
   width: 100%;
   height: auto;
-}
-
-.preview-image {
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: white;
-  margin-bottom: 10px;
 }
 
 .match-score {
@@ -1415,6 +1437,10 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .comparison-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .composer-field {
     grid-template-columns: 1fr;
   }
@@ -1440,5 +1466,9 @@ body {
   .brand-panel,
   .workflow-menu-list {
     width: min(320px, calc(100vw - 32px));
+  }
+
+  .comparison-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -3,16 +3,17 @@
 ## 2026-03-21
 
 - Switched the Neuro viewer and preview assets to a privacy-preserving, lesion-focused crop so the demo no longer exposes full facial structure in MRI previews.
+- Reworked the Neuro analysis panel to show three aligned axial comparison windows instead of a large viewer, with shared bounds and a common slice index so the windows stay visually aligned.
 - Fixed `/demo` Neuro initialization so missing optional arrays like chat messages or uploads no longer leave the page stuck on `Loading`.
 - Added a reusable Jinja2-backed `clinical_report_generator` skill and Python report bundle layer with HTML output and optional PDF fallback.
 - Added a browser-oriented neuro visualization skill and tool layer that produces slice previews, overlays, comparison panels, and a NiiVue-style manifest.
 - Wired the Neuro longitudinal demo to emit reusable report and visualization artifacts alongside the existing compact clinician-facing brief.
 - Added a compact Neuro report generator bundle so the longitudinal review can present a cleaner clinical brief instead of a long wall of text.
-- Added a NiiVue-backed browser viewer for the PROTEAS Neuro demo, with static NIfTI/mask assets materialized under the local derived demo directory.
+- Added a browser-facing Neuro visualization bundle that can materialize derived assets for compact axial comparison panels under the local demo directory.
 - Added neuro skills for report generation and visualization presentation.
 - Wired the console agent to explicitly load the dedicated `neuro_report_generator` skill alongside the shared clinical report generator and neuro visualization skills for neuro longitudinal tasks.
 - Exposed the Neuro viewer assets through the gateway so the demo can load real local volumes directly in the browser.
-- Updated the Neuro demo UI to show a viewer container, timepoint selector, and compact rendered report surface.
+- Updated the Neuro demo UI to prioritize compact rendered report output and aligned axial comparison panes over a heavier viewer-style surface.
 
 ## 2026-03-20
 

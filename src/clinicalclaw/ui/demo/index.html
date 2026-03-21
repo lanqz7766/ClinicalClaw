@@ -10,8 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <script src="https://cdn.jsdelivr.net/npm/@niivue/niivue@0.67.0/dist/niivue.umd.js" defer></script>
-    <link rel="stylesheet" href="/demo-assets/styles.css?v=20260321b" />
+    <link rel="stylesheet" href="/demo-assets/styles.css?v=20260321c" />
   </head>
   <body>
     <div class="app-shell">
@@ -428,23 +427,17 @@
                     <article class="card neuro-preview-card">
                       <div class="panel-heading">
                         <div>
-                          <p class="section-label">NiiVue Viewer</p>
-                          <h3>Representative slice and overlay</h3>
+                          <p class="section-label">Imaging Comparison</p>
+                          <h3>Aligned axial review</h3>
                         </div>
-                        <span class="pill viewer-pill">Web viewer</span>
+                        <span class="pill viewer-pill">Privacy-preserving</span>
                       </div>
-                      <div class="viewer-toolbar">
-                        <label class="viewer-select">
-                          <span>Timepoint</span>
-                          <select id="neuro-viewer-timepoint-select"></select>
-                        </label>
-                        <span id="neuro-viewer-status" class="viewer-status">Loading viewer</span>
+                      <div class="viewer-toolbar compact-toolbar">
+                        <span id="neuro-viewer-status" class="viewer-status">Loading aligned axial views</span>
+                        <span class="privacy-note">Defaced, lesion-focused crop</span>
                       </div>
-                      <div class="viewer-stage">
-                        <canvas id="neuro-viewer-canvas" class="viewer-canvas"></canvas>
-                        <img id="preview-image" class="preview-image viewer-fallback" src="" alt="Representative follow-up MRI with lesion overlay" />
-                      </div>
-                      <p id="preview-caption" class="support-copy"></p>
+                      <div id="neuro-comparison-grid" class="comparison-grid"></div>
+                      <p id="preview-caption" class="support-copy compact-note"></p>
                     </article>
 
                     <article class="card neuro-report-card">
@@ -624,6 +617,6 @@
       </main>
     </div>
 
-    <script src="/demo-assets/app.js?v=20260321b" defer></script>
+    <script src="/demo-assets/app.js?v=20260321c" defer></script>
   </body>
 </html>

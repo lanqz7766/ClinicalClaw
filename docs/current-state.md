@@ -140,7 +140,7 @@ Current neuro longitudinal demo status:
   - representative preview selection
   - trend/timeline/comparison visual rendering
   - compact risk signal generation
-- the Neuro module now also materializes a compact report bundle plus a privacy-preserving NiiVue-backed slice/overlay viewer for the selected timepoints
+- the Neuro module now also materializes a compact report bundle plus three aligned privacy-preserving axial comparison windows for the selected timepoints
 
 ### Runtime Migration
 

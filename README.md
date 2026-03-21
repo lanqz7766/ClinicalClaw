@@ -110,7 +110,7 @@ Neuro longitudinal review:
 - mounted inside `/demo`
 - supports a real local PROTEAS-backed neuro-oncology longitudinal review when `CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT` is configured
 - focuses on post-radiotherapy brain metastasis follow-up, treatment-aligned MRI review, and concise physician-facing summaries
-- includes radiomics-backed lesion trend tracking, an RT-aligned timeline, a privacy-preserving NiiVue-powered slice/overlay viewer, compact report bundles, and reviewer actions
+- includes radiomics-backed lesion trend tracking, an RT-aligned timeline, three aligned privacy-preserving axial comparison windows, compact report bundles, and reviewer actions
 - exposes reusable `render_clinical_report` and `build_neuro_visualization_bundle` tools for agent-driven report and visualization generation
 
 Radiation safety monitor:
@@ -297,6 +297,7 @@ When `CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT` points at a local PROTEAS datas
 - radiomics-backed `T1C` tumor burden as the primary quantitative trend
 - radiotherapy event alignment on the clinical timeline
 - compact SVG visualizations for trend, timeline, and key comparisons
+- three aligned axial T1C comparison windows with privacy-preserving lesion-focused crops
 - a concise neuro-oncology brief suitable for demo presentation and review
 
 This dataset path is intentionally local-only and must not be committed.

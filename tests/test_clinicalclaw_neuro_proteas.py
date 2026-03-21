@@ -8,7 +8,6 @@ import pytest
 import nibabel as nib
 
 from clinicalclaw.neuro_longitudinal_proteas import build_neuro_longitudinal_workspace
-from clinicalclaw.neuro_pipeline import build_t1_raw_ingest_manifest, load_pipeline_manifest, save_t1_raw_ingest_manifest
 
 
 P28_ZIP = Path("/Users/qlan/Documents/Agent/Data/17253793/P28.zip")
@@ -36,11 +35,11 @@ def _extract_p28_series(tmp_path: Path, series_names: list[str]) -> Path:
 
 @pytest.mark.asyncio
 async def test_p28_subset_ranks_t1c_ahead_of_flar_and_supports_inventory(tmp_path: Path):
-    from clawagents.tools.neuro import create_neuro_tools
+    neuro_tools = pytest.importorskip("clawagents.tools.neuro")
 
     raw_root = _extract_p28_series(tmp_path, ["T1C_2022-06-27", "T1C_2022-08-04", "FLR_2022-06-27"])
 
-    tools = {tool.name: tool for tool in create_neuro_tools()}
+    tools = {tool.name: tool for tool in neuro_tools.create_neuro_tools()}
 
     inventory = await tools["dicom_series_inventory"].execute({"path": str(raw_root)})
     assert inventory.success is True
@@ -60,9 +59,10 @@ async def test_p28_subset_ranks_t1c_ahead_of_flar_and_supports_inventory(tmp_pat
 
 
 def test_p28_subset_builds_a_stable_t1_raw_ingest_manifest(tmp_path: Path):
+    neuro_pipeline = pytest.importorskip("clinicalclaw.neuro_pipeline")
     raw_root = _extract_p28_series(tmp_path, ["T1C_2022-06-27", "T1C_2022-08-04", "FLR_2022-06-27"])
 
-    manifest = build_t1_raw_ingest_manifest(
+    manifest = neuro_pipeline.build_t1_raw_ingest_manifest(
         raw_dicom_root=str(raw_root),
         subject_id="P28",
         output_root=str(tmp_path / "derived"),
@@ -71,8 +71,8 @@ def test_p28_subset_builds_a_stable_t1_raw_ingest_manifest(tmp_path: Path):
         top_k=3,
     )
 
-    manifest_path = save_t1_raw_ingest_manifest(manifest, str(tmp_path / "manifest.json"))
-    reloaded = load_pipeline_manifest(manifest_path)
+    manifest_path = neuro_pipeline.save_t1_raw_ingest_manifest(manifest, str(tmp_path / "manifest.json"))
+    reloaded = neuro_pipeline.load_pipeline_manifest(manifest_path)
 
     assert manifest.scenario_id == "t1_raw_ingest"
     assert manifest.scheduler.queue == "neuro.t1_raw_ingest"
@@ -103,6 +103,9 @@ def test_p28_workspace_builds_real_longitudinal_review():
     assert workspace.visualizations.trend_svg.startswith("<svg")
     assert workspace.visualizations.timeline_svg.startswith("<svg")
     assert workspace.visualizations.comparison_svg.startswith("<svg")
+    assert len(workspace.visualizations.comparison_panels) == 3
+    assert workspace.visualizations.comparison_panels[0]["label"] == "Baseline"
+    assert workspace.visualizations.comparison_panels[-1]["label"] == "Latest"
     assert workspace.viewer["available"] is True
     assert workspace.viewer["enabled"] is False
     assert workspace.viewer["privacy_mode"] == "focus_crop_defaced"
@@ -125,6 +128,8 @@ def test_p28_materialized_viewer_assets_are_privacy_preserving(tmp_path: Path):
     viewer = workspace.viewer
     assert viewer["available"] is True
     assert viewer["privacy_mode"] == "focus_crop_defaced"
+    assert len(workspace.visualizations.comparison_panels) == 3
+    assert all(panel.get("preview_path") for panel in workspace.visualizations.comparison_panels)
     first = viewer["timepoints"][0]
     image_path = tmp_path / "derived" / "P28" / "viewer" / first["timepoint"] / "t1c.nii.gz"
     assert image_path.exists()

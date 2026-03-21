@@ -933,14 +933,6 @@ function renderNeuroAnalysis(workspace) {
 
 function renderReport(workspace) {
   const report = workspace.report || {};
-  const preview = workspace.imaging_preview || {};
-  const visualizations = workspace.visualizations || {};
-  const previewUrl =
-    preview.image_url ||
-    (visualizations.comparison_svg ? svgDataUrl(visualizations.comparison_svg) : null) ||
-    "/demo-assets/brain-metastasis-preview.svg";
-  document.getElementById("preview-image").src = previewUrl;
-  document.getElementById("preview-caption").textContent = preview.caption || "";
   document.getElementById("report-title").textContent = report.title || "Longitudinal review brief";
   document.getElementById("report-summary").textContent = report.summary || "";
   const rendered = report.rendered_html || "";
@@ -965,97 +957,52 @@ function renderReport(workspace) {
   }`;
 }
 
-function getNeuroViewerPayload(workspace) {
-  return workspace?.imaging_preview?.viewer || workspace?.viewer || {};
-}
-
-function getNiivueConstructor() {
-  return window.niivue?.Niivue || window.Niivue || null;
-}
-
-async function renderNeuroViewer(workspace) {
+function renderNeuroComparisonPanels(workspace) {
   const preview = workspace.imaging_preview || {};
-  const viewer = getNeuroViewerPayload(workspace);
-  const timepoints = viewer.timepoints || [];
-  const canvas = document.getElementById("neuro-viewer-canvas");
+  const visualizations = workspace.visualizations || {};
+  const panels = Array.isArray(visualizations.comparison_panels) ? visualizations.comparison_panels : [];
   const status = document.getElementById("neuro-viewer-status");
-  const select = document.getElementById("neuro-viewer-timepoint-select");
-  const fallback = document.getElementById("preview-image");
+  const container = document.getElementById("neuro-comparison-grid");
   const caption = document.getElementById("preview-caption");
 
-  if (!canvas || !status || !select || !fallback || !caption) {
+  if (!status || !container || !caption) {
     return;
   }
 
-  if (!timepoints.length) {
-    status.textContent = "Static preview";
-    canvas.classList.remove("active");
-    fallback.classList.remove("hidden");
-    fallback.src = fallback.src || "/demo-assets/brain-metastasis-preview.svg";
-    caption.textContent = preview.caption || "Viewer assets are not available for this case.";
+  if (!panels.length) {
+    status.textContent = "Static comparison unavailable";
+    caption.textContent = preview.caption || "Comparison images are not available for this case yet.";
+    container.innerHTML = `
+      <div class="comparison-empty">
+        <img src="/demo-assets/brain-metastasis-preview.svg" alt="Static neuro comparison preview">
+      </div>
+    `;
     return;
   }
 
-  const previousCaseId = state.neuro.viewer.caseId;
-  state.neuro.viewer.caseId = workspace.id;
-  if (!state.neuro.viewer.instance || previousCaseId !== workspace.id) {
-    state.neuro.viewer.instance = null;
-    state.neuro.viewer.activeIndex = timepoints.length - 1;
-  }
-
-  select.innerHTML = timepoints
+  status.textContent = "3 aligned axial windows";
+  caption.textContent = preview.caption || "Aligned axial comparison with lesion overlay.";
+  container.innerHTML = panels
+    .slice(0, 3)
     .map(
-      (item, index) =>
-        `<option value="${index}" ${index === state.neuro.viewer.activeIndex ? "selected" : ""}>${item.clinical_label || item.timepoint} · ${formatDate(item.study_date)}</option>`,
+      (panel) => `
+        <article class="comparison-panel">
+          <div class="comparison-panel-head">
+            <strong>${panel.label}</strong>
+            <span>${formatDate(panel.study_date)}</span>
+          </div>
+          <div class="comparison-frame">
+            <img
+              src="${panel.preview_url || panel.overlay_url || "/demo-assets/brain-metastasis-preview.svg"}"
+              alt="${panel.label} axial T1C lesion overlay"
+              class="comparison-image"
+            />
+          </div>
+          <p class="comparison-caption">${titleCase(panel.timepoint)}</p>
+        </article>
+      `,
     )
     .join("");
-
-  const niivueCtor = getNiivueConstructor();
-  if (!niivueCtor) {
-    status.textContent = "Static preview";
-    canvas.classList.remove("active");
-    fallback.classList.remove("hidden");
-    caption.textContent = `${preview.caption || "Interactive viewer unavailable."} Showing a static preview instead.`;
-    return;
-  }
-
-  const activeIndex = Math.min(Math.max(state.neuro.viewer.activeIndex || 0, 0), timepoints.length - 1);
-  const active = timepoints[activeIndex] || timepoints[timepoints.length - 1];
-  state.neuro.viewer.activeIndex = activeIndex;
-
-  try {
-    const instance = new niivueCtor({
-      show3Dcrosshair: false,
-      isOrientCube: false,
-      backColor: [0.965, 0.973, 0.98, 1],
-      textColor: [0.2, 0.24, 0.3, 1],
-      crosshairColor: [0.15, 0.42, 0.75, 1],
-      showLegend: false,
-    });
-    state.neuro.viewer.instance = instance;
-    const attach = instance.attachToCanvas || instance.attachTo;
-    if (typeof attach !== "function") {
-      throw new Error("NiiVue attach method unavailable");
-    }
-    attach.call(instance, canvas);
-    if (typeof instance.setRadiologicalConvention === "function") {
-      instance.setRadiologicalConvention(true);
-    }
-    await instance.loadVolumes([
-      { url: active.image_url },
-      { url: active.mask_url, opacity: 0.4, colormap: "red", cal_min: 0.5, cal_max: 1.5 },
-    ]);
-    canvas.classList.add("active");
-    fallback.classList.add("hidden");
-    status.textContent = `${active.clinical_label || active.timepoint} · ${formatDate(active.study_date)}`;
-    caption.textContent = `${preview.caption || "Interactive overlay viewer."} Current selection: ${active.clinical_label || active.timepoint}.`;
-  } catch (error) {
-    state.neuro.viewer.instance = null;
-    canvas.classList.remove("active");
-    fallback.classList.remove("hidden");
-    status.textContent = "Static preview";
-    caption.textContent = `${preview.caption || "Interactive viewer unavailable."} Showing a static preview instead.`;
-  }
 }
 
 function renderNeuroReview(review, audit) {
@@ -1102,7 +1049,7 @@ function renderNeuroWorkspace(workspace) {
   renderReport(workspace);
   renderNeuroReview(workspace.review, workspace.audit);
   renderUploads(workspace.uploads);
-  renderNeuroViewer(workspace);
+  renderNeuroComparisonPanels(workspace);
 }
 
 function renderSafetyCaseList() {
@@ -1581,13 +1528,6 @@ function bindEvents() {
       return;
     }
     await loadNeuroWorkspace(event.target.value);
-  });
-  document.getElementById("neuro-viewer-timepoint-select").addEventListener("change", async (event) => {
-    if (!state.neuro.workspace || !state.neuro.workspace.imaging_preview) {
-      return;
-    }
-    state.neuro.viewer.activeIndex = Number(event.target.value || 0);
-    await renderNeuroViewer(state.neuro.workspace);
   });
   document.querySelectorAll("[data-review-action]").forEach((button) => {
     button.addEventListener("click", () => handleNeuroReview(button.dataset.reviewAction));

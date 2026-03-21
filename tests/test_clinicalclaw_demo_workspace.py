@@ -33,6 +33,7 @@ def test_demo_workspace_prefers_real_proteas_case_when_env_is_set(monkeypatch):
     assert payload["workspace"]["id"].startswith("proteas-")
     assert len(payload["workspace"]["timeline"]) >= 4
     assert payload["workspace"]["visualizations"]["trend_svg"].startswith("<svg")
+    assert len(payload["workspace"]["visualizations"]["comparison_panels"]) == 3
     assert payload["workspace"]["viewer"]["available"] is True
     assert payload["workspace"]["viewer"]["enabled"] is True
     assert "neuro-report-surface" in payload["workspace"]["report"]["rendered_html"]
@@ -128,5 +129,5 @@ def test_demo_routes_expose_workspace_and_chat():
         assert "Findings Closure" in demo_page.text
         assert "Queue Triage" in demo_page.text
         assert "Missed Diagnosis Review" in demo_page.text
-        assert "NiiVue Viewer" in demo_page.text
+        assert "Aligned axial review" in demo_page.text
         assert "/findings-demo" in demo_page.text

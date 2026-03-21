@@ -1313,13 +1313,23 @@ def build_neuro_longitudinal_workspace(
         output_dir=output_base,
         title="PROTEAS longitudinal brain metastasis review",
     )
+    comparison_panels = []
+    for panel in visualization_bundle.comparison_panels:
+        panel_payload = dict(panel)
+        preview_url = _derived_asset_url(Path(panel["preview_path"]))
+        overlay_url = _derived_asset_url(Path(panel["overlay_path"])) if panel.get("overlay_path") else None
+        if preview_url:
+            panel_payload["preview_url"] = preview_url
+        if overlay_url:
+            panel_payload["overlay_url"] = overlay_url
+        comparison_panels.append(panel_payload)
     visualization_payload = NeuroVisualizationPayload(
         trend_svg=trend_svg,
         timeline_svg=timeline_svg,
         comparison_svg=comparison_svg,
         viewer_manifest=visualization_bundle.viewer_manifest,
         preview_assets=[asset.model_dump() for asset in visualization_bundle.preview_assets],
-        comparison_panels=visualization_bundle.comparison_panels,
+        comparison_panels=comparison_panels,
         asset_paths={
             "trend_svg": str(output_base / "trend.svg"),
             "timeline_svg": str(output_base / "timeline.svg"),

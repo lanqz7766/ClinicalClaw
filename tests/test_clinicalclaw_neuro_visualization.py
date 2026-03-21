@@ -5,6 +5,7 @@ from pathlib import Path
 
 import nibabel as nib
 import numpy as np
+from PIL import Image
 
 from clinicalclaw.neuro_visualization import (
     build_neuro_visualization_bundle,
@@ -70,6 +71,9 @@ def test_build_neuro_visualization_bundle_creates_manifest_and_previews(tmp_path
     assert Path(bundle.preview_assets[0].overlay_path or bundle.preview_assets[0].slice_path).exists()
     assert "baseline_slice" in bundle.asset_paths
     assert "fu1_overlay" in bundle.asset_paths
+    baseline_image = Image.open(bundle.preview_assets[0].overlay_path or bundle.preview_assets[0].slice_path)
+    followup_image = Image.open(bundle.preview_assets[1].overlay_path or bundle.preview_assets[1].slice_path)
+    assert baseline_image.size == followup_image.size == (320, 320)
 
 
 def test_materialize_privacy_preserving_viewer_assets_crops_volume(tmp_path):
