@@ -15,7 +15,10 @@ from typing import Any, Iterable
 from pydantic import BaseModel, Field
 
 from clinicalclaw.neuro_report_generator import build_neuro_report_bundle
-from clinicalclaw.neuro_visualization import build_neuro_visualization_bundle
+from clinicalclaw.neuro_visualization import (
+    build_neuro_visualization_bundle,
+    materialize_privacy_preserving_viewer_assets,
+)
 from clinicalclaw.reporting import build_report_document_from_workspace, export_report_bundle
 
 
@@ -512,19 +515,26 @@ def _build_viewer_manifest(
             "image_url": None,
             "mask_url": None,
             "flair_url": None,
+            "privacy_mode": "focus_crop_defaced",
         }
         if materialize_assets and image_member:
             base_target = viewer_root / point.timepoint / "t1c.nii.gz"
-            _materialize_archive_member(archive_path, image_member, base_target)
-            payload["image_url"] = _derived_asset_url(base_target)
-        if materialize_assets and mask_member:
             overlay_target = viewer_root / point.timepoint / "tumor_mask.nii.gz"
-            _materialize_archive_member(archive_path, mask_member, overlay_target)
-            payload["mask_url"] = _derived_asset_url(overlay_target)
-        if materialize_assets and flair_member:
             flair_target = viewer_root / point.timepoint / "flair.nii.gz"
-            _materialize_archive_member(archive_path, flair_member, flair_target)
-            payload["flair_url"] = _derived_asset_url(flair_target)
+            materialize_privacy_preserving_viewer_assets(
+                archive_path=archive_path,
+                image_member=image_member,
+                output_image_path=base_target,
+                mask_member=mask_member,
+                output_mask_path=overlay_target if mask_member else None,
+                flair_member=flair_member,
+                output_flair_path=flair_target if flair_member else None,
+            )
+            payload["image_url"] = _derived_asset_url(base_target)
+            if mask_member:
+                payload["mask_url"] = _derived_asset_url(overlay_target)
+            if flair_member:
+                payload["flair_url"] = _derived_asset_url(flair_target)
         timepoints.append(payload)
 
     default_timepoint = timeline[-1].timepoint if timeline else "baseline"
@@ -539,6 +549,7 @@ def _build_viewer_manifest(
         "fallback_comparison_svg": comparison_svg or visualizations.comparison_svg,
         "loading_label": "Loading the longitudinal imaging review",
         "fallback_label": "Interactive viewing is unavailable. Falling back to the static longitudinal preview.",
+        "privacy_mode": "focus_crop_defaced",
     }
 
 
@@ -1217,7 +1228,7 @@ def build_neuro_longitudinal_workspace(
 
     imaging_preview = {
         "title": "Representative T1C follow-up view",
-        "caption": "Longitudinal imaging review uses the T1C series as the primary response canvas, with FLAIR and T1W as supporting context. Tumor masks remain available for preview and overlay.",
+        "caption": "Longitudinal imaging review uses privacy-preserving, lesion-focused T1C views as the primary response canvas, with aligned overlay support for follow-up comparison.",
         "primary_modality": "T1C",
         "secondary_modalities": ["FLAIR", "T1W", "T2W"],
         "series_catalog": series_catalog,
@@ -1236,7 +1247,7 @@ def build_neuro_longitudinal_workspace(
         "workflow": workflow,
         "imaging_preview": {
             "title": "Representative T1C follow-up view",
-            "caption": "Longitudinal imaging review uses the T1C series as the primary response canvas, with FLAIR and T1W as supporting context. Tumor masks remain available for preview and overlay.",
+            "caption": "Longitudinal imaging review uses privacy-preserving, lesion-focused T1C views as the primary response canvas, with aligned overlay support for follow-up comparison.",
             "primary_modality": "T1C",
             "secondary_modalities": ["FLAIR", "T1W", "T2W"],
             "series_catalog": series_catalog,

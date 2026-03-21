@@ -5,6 +5,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+import nibabel as nib
 
 from clinicalclaw.neuro_longitudinal_proteas import build_neuro_longitudinal_workspace
 from clinicalclaw.neuro_pipeline import build_t1_raw_ingest_manifest, load_pipeline_manifest, save_t1_raw_ingest_manifest
@@ -104,6 +105,37 @@ def test_p28_workspace_builds_real_longitudinal_review():
     assert workspace.visualizations.comparison_svg.startswith("<svg")
     assert workspace.viewer["available"] is True
     assert workspace.viewer["enabled"] is False
+    assert workspace.viewer["privacy_mode"] == "focus_crop_defaced"
     assert "neuro-report-surface" in workspace.report["rendered_html"]
     assert workspace.workflow["events"][0]["date"] == "2022-06-30"
     assert workspace.analysis.risk_level
+
+
+def test_p28_materialized_viewer_assets_are_privacy_preserving(tmp_path: Path):
+    if not P28_ZIP.exists():
+        pytest.skip("P28.zip is not available in the expected local data directory.")
+
+    workspace = build_neuro_longitudinal_workspace(
+        data_root=P28_ZIP.parent,
+        patient_id="P28",
+        materialize_assets=True,
+        output_root=tmp_path / "derived",
+    )
+
+    viewer = workspace.viewer
+    assert viewer["available"] is True
+    assert viewer["privacy_mode"] == "focus_crop_defaced"
+    first = viewer["timepoints"][0]
+    image_path = tmp_path / "derived" / "P28" / "viewer" / first["timepoint"] / "t1c.nii.gz"
+    assert image_path.exists()
+
+    cropped = nib.load(str(image_path))
+    with zipfile.ZipFile(P28_ZIP) as archive:
+        with archive.open(f"P28/BraTS/{first['timepoint']}/t1c.nii.gz") as src:
+            original_bytes = src.read()
+    original_tmp = tmp_path / "original.nii.gz"
+    original_tmp.write_bytes(original_bytes)
+    original = nib.load(str(original_tmp))
+
+    assert cropped.shape[0] < original.shape[0]
+    assert cropped.shape[1] < original.shape[1]

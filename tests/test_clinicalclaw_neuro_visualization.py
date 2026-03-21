@@ -6,7 +6,10 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 
-from clinicalclaw.neuro_visualization import build_neuro_visualization_bundle
+from clinicalclaw.neuro_visualization import (
+    build_neuro_visualization_bundle,
+    materialize_privacy_preserving_viewer_assets,
+)
 
 
 def _write_nifti(path: Path, data: np.ndarray) -> None:
@@ -18,15 +21,15 @@ def _write_nifti(path: Path, data: np.ndarray) -> None:
 def _build_synthetic_archive(tmp_path: Path) -> Path:
     source_root = tmp_path / "source"
     patient_root = source_root / "PTEST"
-    baseline_volume = np.zeros((16, 16, 16), dtype=np.float32)
-    baseline_volume[5:11, 5:11, 7:10] = 140.0
-    followup_volume = np.zeros((16, 16, 16), dtype=np.float32)
-    followup_volume[4:12, 4:12, 6:11] = 190.0
+    baseline_volume = np.zeros((64, 64, 64), dtype=np.float32)
+    baseline_volume[24:32, 28:36, 30:34] = 140.0
+    followup_volume = np.zeros((64, 64, 64), dtype=np.float32)
+    followup_volume[23:34, 27:38, 29:36] = 190.0
 
-    baseline_mask = np.zeros((16, 16, 16), dtype=np.float32)
-    baseline_mask[5:11, 5:11, 7:10] = 1.0
-    followup_mask = np.zeros((16, 16, 16), dtype=np.float32)
-    followup_mask[4:12, 4:12, 6:11] = 1.0
+    baseline_mask = np.zeros((64, 64, 64), dtype=np.float32)
+    baseline_mask[24:32, 28:36, 30:34] = 1.0
+    followup_mask = np.zeros((64, 64, 64), dtype=np.float32)
+    followup_mask[23:34, 27:38, 29:36] = 1.0
 
     _write_nifti(patient_root / "BraTS" / "baseline" / "t1c.nii.gz", baseline_volume)
     _write_nifti(patient_root / "BraTS" / "fu1" / "t1c.nii.gz", followup_volume)
@@ -60,6 +63,7 @@ def test_build_neuro_visualization_bundle_creates_manifest_and_previews(tmp_path
     assert bundle.viewer == "niivue"
     assert len(bundle.preview_assets) == 2
     assert bundle.viewer_manifest["selected_timepoints"] == ["baseline", "fu1"]
+    assert bundle.viewer_manifest["privacy_mode"] == "focus_crop_defaced"
     assert len(bundle.comparison_panels) == 2
     assert Path(bundle.asset_paths["manifest"]).exists()
     assert Path(bundle.preview_assets[0].slice_path).exists()
@@ -67,3 +71,23 @@ def test_build_neuro_visualization_bundle_creates_manifest_and_previews(tmp_path
     assert "baseline_slice" in bundle.asset_paths
     assert "fu1_overlay" in bundle.asset_paths
 
+
+def test_materialize_privacy_preserving_viewer_assets_crops_volume(tmp_path):
+    archive_path = _build_synthetic_archive(tmp_path)
+    output_root = tmp_path / "viewer"
+
+    result = materialize_privacy_preserving_viewer_assets(
+        archive_path=archive_path,
+        image_member="PTEST/BraTS/baseline/t1c.nii.gz",
+        output_image_path=output_root / "baseline" / "t1c.nii.gz",
+        mask_member="PTEST/tumor_segmentation/PTEST_tumor_mask_baseline.nii.gz",
+        output_mask_path=output_root / "baseline" / "tumor_mask.nii.gz",
+    )
+
+    cropped_image = nib.load(str(output_root / "baseline" / "t1c.nii.gz"))
+    cropped_mask = nib.load(str(output_root / "baseline" / "tumor_mask.nii.gz"))
+
+    assert result["privacy_mode"] == "focus_crop_defaced"
+    assert cropped_image.shape != (64, 64, 64)
+    assert any(dimension < 64 for dimension in cropped_image.shape)
+    assert cropped_mask.shape == cropped_image.shape

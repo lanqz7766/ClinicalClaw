@@ -2,6 +2,8 @@
 
 ## 2026-03-21
 
+- Switched the Neuro viewer and preview assets to a privacy-preserving, lesion-focused crop so the demo no longer exposes full facial structure in MRI previews.
+- Fixed `/demo` Neuro initialization so missing optional arrays like chat messages or uploads no longer leave the page stuck on `Loading`.
 - Added a reusable Jinja2-backed `clinical_report_generator` skill and Python report bundle layer with HTML output and optional PDF fallback.
 - Added a browser-oriented neuro visualization skill and tool layer that produces slice previews, overlays, comparison panels, and a NiiVue-style manifest.
 - Wired the Neuro longitudinal demo to emit reusable report and visualization artifacts alongside the existing compact clinician-facing brief.

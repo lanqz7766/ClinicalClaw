@@ -10,7 +10,7 @@ ClinicalClaw is a modular clinical AI execution and integration platform built o
 - a unified `/demo` console with real chat routing into workflow modules
 - workflow-specific presentation skills for cleaner, clinician-facing output
 - a reusable Jinja2-backed report generator skill with optional PDF fallback
-- a browser-oriented neuro visualization skill that renders slice previews, overlays, and a NiiVue-style manifest
+- a browser-oriented neuro visualization skill that renders privacy-preserving slice previews, overlays, and a NiiVue-style manifest
 - a new `clinicalclaw.engine` compatibility namespace that begins internalizing the runtime under the ClinicalClaw brand
 
 ## What It Is Today
@@ -110,7 +110,7 @@ Neuro longitudinal review:
 - mounted inside `/demo`
 - supports a real local PROTEAS-backed neuro-oncology longitudinal review when `CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT` is configured
 - focuses on post-radiotherapy brain metastasis follow-up, treatment-aligned MRI review, and concise physician-facing summaries
-- includes radiomics-backed lesion trend tracking, RT-aligned timeline, a NiiVue-powered slice/overlay viewer, compact report bundles, and reviewer actions
+- includes radiomics-backed lesion trend tracking, an RT-aligned timeline, a privacy-preserving NiiVue-powered slice/overlay viewer, compact report bundles, and reviewer actions
 - exposes reusable `render_clinical_report` and `build_neuro_visualization_bundle` tools for agent-driven report and visualization generation
 
 Radiation safety monitor:

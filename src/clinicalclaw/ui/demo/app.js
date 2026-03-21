@@ -93,7 +93,14 @@ async function consumeSSE(url, body, onEvent) {
 }
 
 function formatDate(value) {
-  return new Date(value).toLocaleDateString("en-US", {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -101,7 +108,14 @@ function formatDate(value) {
 }
 
 function formatTimestamp(value) {
-  return new Date(value).toLocaleString("en-US", {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  return date.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -723,8 +737,9 @@ function renderScreeningWorkspace(workspace) {
 
 function renderUploads(uploads) {
   const container = document.getElementById("upload-list");
-  container.innerHTML = uploads.length
-    ? uploads
+  const items = Array.isArray(uploads) ? uploads : [];
+  container.innerHTML = items.length
+    ? items
         .map(
           (item) => `
             <div class="upload-chip">
@@ -781,7 +796,8 @@ function renderMetrics(workspace) {
 
 function renderNeuroChat(messages) {
   const log = document.getElementById("chat-log");
-  log.innerHTML = messages
+  const entries = Array.isArray(messages) ? messages : [];
+  log.innerHTML = entries
     .slice(-6)
     .map(
       (message) => `
@@ -1043,18 +1059,20 @@ async function renderNeuroViewer(workspace) {
 }
 
 function renderNeuroReview(review, audit) {
-  document.getElementById("review-comment").value = review.comment || "";
+  const currentReview = review || {};
+  const auditTrail = Array.isArray(audit) ? audit : [];
+  document.getElementById("review-comment").value = currentReview.comment || "";
   document.getElementById("review-history").innerHTML = `
     <div class="audit-item info">
-      <strong>${reviewLabel(review.status)}</strong>
-      <p>${review.comment || "No reviewer comment yet."}</p>
+      <strong>${reviewLabel(currentReview.status)}</strong>
+      <p>${currentReview.comment || "No reviewer comment yet."}</p>
       <div class="meta-row">
-        <span>${review.reviewer}</span>
-        <span>${formatTimestamp(review.updated_at)}</span>
+        <span>${currentReview.reviewer}</span>
+        <span>${formatTimestamp(currentReview.updated_at)}</span>
       </div>
     </div>
   `;
-  document.getElementById("audit-list").innerHTML = audit
+  document.getElementById("audit-list").innerHTML = auditTrail
     .slice(0, 6)
     .map(
       (item) => `
@@ -1587,26 +1605,43 @@ function bindEvents() {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
-  bindEvents();
-  state.homeMessages = [
-    {
-      role: "system",
-      content:
-        "Start with a clinical request. ClinicalClaw will route it, review the relevant context, and open the right workspace when needed.",
-    },
-  ];
-  renderHomeChat();
-  renderRouterCard();
-  await Promise.all([
-    loadConsole(),
-    loadNeuroWorkspace(),
-    loadSafetyWorkspace(),
-    loadQueueWorkspace(),
-    loadDiagnosisWorkspace(),
-    loadScreeningWorkspace(),
-  ]);
-  await loadFindingsWorkspace();
-  setPage("home");
-  setSubView("neuro", "analysis");
-  setSubView("safety", "overview");
+  try {
+    bindEvents();
+    state.homeMessages = [
+      {
+        role: "system",
+        content:
+          "Start with a clinical request. ClinicalClaw will route it, review the relevant context, and open the right workspace when needed.",
+      },
+    ];
+    renderHomeChat();
+    renderRouterCard();
+    await Promise.all([
+      loadConsole(),
+      loadNeuroWorkspace(),
+      loadSafetyWorkspace(),
+      loadQueueWorkspace(),
+      loadDiagnosisWorkspace(),
+      loadScreeningWorkspace(),
+    ]);
+    await loadFindingsWorkspace();
+    setPage("home");
+    setSubView("neuro", "analysis");
+    setSubView("safety", "overview");
+  } catch (error) {
+    console.error("ClinicalClaw demo failed to initialize", error);
+    state.homeMessages = [
+      {
+        role: "assistant",
+        content: `The demo did not finish loading: ${error?.message || error}. Try a hard refresh once. If it still fails, the page is now surfacing the real initialization error instead of staying on Loading.`,
+      },
+    ];
+    renderHomeChat();
+    renderRouterCard({
+      workflow: { title: "Loading issue" },
+      reason: error?.message || "The demo failed to initialize.",
+      target_module: "home",
+      alternatives: [],
+    });
+  }
 });

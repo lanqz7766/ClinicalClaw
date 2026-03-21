@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Any, Iterable
@@ -72,6 +73,99 @@ def _load_volume(path: Path) -> np.ndarray:
     return np.asarray(data)
 
 
+def _mask_bounds(mask: np.ndarray | None) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]] | None:
+    if mask is None or mask.ndim < 3 or not np.any(mask > 0):
+        return None
+    coords = np.argwhere(mask > 0)
+    mins = coords.min(axis=0)
+    maxs = coords.max(axis=0) + 1
+    return tuple((int(mins[idx]), int(maxs[idx])) for idx in range(3))
+
+
+def _fallback_volume_bounds(volume: np.ndarray) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
+    shape = volume.shape[:3]
+    finite = volume[np.isfinite(volume)]
+    positive = finite[finite > 0]
+    threshold = float(np.percentile(positive, 15)) if positive.size else 0.0
+    active = np.argwhere(volume > threshold)
+    if active.size == 0:
+        return tuple((0, int(shape[idx])) for idx in range(3))
+    mins = active.min(axis=0)
+    maxs = active.max(axis=0) + 1
+    return tuple((int(mins[idx]), int(maxs[idx])) for idx in range(3))
+
+
+def _expand_bounds(
+    bounds: tuple[tuple[int, int], tuple[int, int], tuple[int, int]],
+    shape: tuple[int, int, int],
+    padding: tuple[int, int, int] = (28, 28, 16),
+) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
+    expanded: list[tuple[int, int]] = []
+    for idx, (start, end) in enumerate(bounds):
+        pad = padding[idx]
+        expanded.append((max(start - pad, 0), min(end + pad, shape[idx])))
+    return tuple(expanded)
+
+
+def _focus_crop_arrays(
+    volume: np.ndarray,
+    mask: np.ndarray | None = None,
+    padding: tuple[int, int, int] = (28, 28, 16),
+) -> tuple[np.ndarray, np.ndarray | None, tuple[tuple[int, int], tuple[int, int], tuple[int, int]]]:
+    shape = tuple(int(value) for value in volume.shape[:3])
+    base_bounds = _mask_bounds(mask) or _fallback_volume_bounds(volume)
+    bounds = _expand_bounds(base_bounds, shape, padding=padding)
+    slices = tuple(slice(start, end) for start, end in bounds)
+    cropped_volume = volume[slices]
+    cropped_mask = mask[slices] if mask is not None else None
+    return cropped_volume, cropped_mask, bounds
+
+
+def _crop_nifti_pair(
+    image_path: Path,
+    mask_path: Path | None,
+    output_image_path: Path,
+    output_mask_path: Path | None = None,
+    extra_modalities: list[tuple[Path, Path]] | None = None,
+) -> dict[str, Any]:
+    image = nib.load(str(image_path))
+    image_data = image.get_fdata(dtype=np.float32)
+    if image_data.ndim == 4:
+        image_data = image_data[..., 0]
+
+    mask_image = nib.load(str(mask_path)) if mask_path and mask_path.exists() else None
+    mask_data = None
+    if mask_image is not None:
+        mask_data = mask_image.get_fdata(dtype=np.float32)
+        if mask_data.ndim == 4:
+            mask_data = mask_data[..., 0]
+
+    _, _, bounds = _focus_crop_arrays(image_data, mask_data)
+    slices = tuple(slice(start, end) for start, end in bounds)
+
+    output_image_path.parent.mkdir(parents=True, exist_ok=True)
+    nib.save(image.slicer[slices], str(output_image_path))
+
+    if mask_image is not None and output_mask_path is not None:
+        output_mask_path.parent.mkdir(parents=True, exist_ok=True)
+        nib.save(mask_image.slicer[slices], str(output_mask_path))
+
+    written_modalities: dict[str, str] = {}
+    for source_path, target_path in extra_modalities or []:
+        extra_image = nib.load(str(source_path))
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        nib.save(extra_image.slicer[slices], str(target_path))
+        written_modalities[target_path.stem] = str(target_path)
+
+    return {
+        "bounds": bounds,
+        "image_path": str(output_image_path),
+        "mask_path": str(output_mask_path) if output_mask_path else None,
+        "extra_paths": written_modalities,
+        "privacy_mode": "focus_crop_defaced",
+    }
+
+
 def _select_axial_index(volume: np.ndarray, mask: np.ndarray | None = None) -> int:
     if mask is not None and mask.ndim >= 3 and np.any(mask > 0):
         coords = np.argwhere(mask > 0)
@@ -108,15 +202,16 @@ def _mask_to_overlay(mask: np.ndarray, index: int) -> Image.Image:
 def _save_preview_pair(volume_path: Path, mask_path: Path | None, output_dir: Path, stem: str) -> dict[str, Any]:
     volume = _load_volume(volume_path)
     mask = _load_volume(mask_path) if mask_path and mask_path.exists() else None
-    slice_index = _select_axial_index(volume, mask)
-    base = _slice_to_image(volume, slice_index)
+    cropped_volume, cropped_mask, _ = _focus_crop_arrays(volume, mask)
+    slice_index = _select_axial_index(cropped_volume, cropped_mask)
+    base = _slice_to_image(cropped_volume, slice_index)
     base = base.resize((320, 320), Image.Resampling.BILINEAR)
     slice_path = output_dir / f"{stem}_slice.png"
     base.save(slice_path)
 
     overlay_path = None
-    if mask is not None:
-        overlay = _mask_to_overlay(mask, slice_index)
+    if cropped_mask is not None:
+        overlay = _mask_to_overlay(cropped_mask, slice_index)
         overlay = overlay.resize((320, 320), Image.Resampling.NEAREST)
         composite = base.copy()
         composite.alpha_composite(overlay)
@@ -129,6 +224,7 @@ def _save_preview_pair(volume_path: Path, mask_path: Path | None, output_dir: Pa
         "slice_index": slice_index,
         "slice_path": slice_path,
         "overlay_path": overlay_path,
+        "privacy_mode": "focus_crop_defaced",
     }
 
 
@@ -253,6 +349,7 @@ def build_neuro_visualization_bundle(
         "case_id": patient_id,
         "title": title,
         "asset_root": str(target_dir),
+        "privacy_mode": "focus_crop_defaced",
         "volumes": manifest_volumes,
         "overlays": manifest_overlays,
         "selected_timepoints": [item.timepoint for item in preview_assets],
@@ -286,3 +383,36 @@ def build_neuro_visualization_bundle(
         comparison_panels=comparison_panels,
         asset_paths=asset_paths,
     )
+
+
+def materialize_privacy_preserving_viewer_assets(
+    *,
+    archive_path: str | Path,
+    image_member: str,
+    output_image_path: str | Path,
+    mask_member: str | None = None,
+    output_mask_path: str | Path | None = None,
+    flair_member: str | None = None,
+    output_flair_path: str | Path | None = None,
+) -> dict[str, Any]:
+    archive = Path(archive_path).expanduser().resolve()
+    out_image = Path(output_image_path).expanduser().resolve()
+    out_mask = Path(output_mask_path).expanduser().resolve() if output_mask_path else None
+    out_flair = Path(output_flair_path).expanduser().resolve() if output_flair_path else None
+
+    with tempfile.TemporaryDirectory(prefix="clinicalclaw-neuro-") as temp_dir:
+        temp_root = Path(temp_dir)
+        extracted_image = _extract_member(archive, image_member, temp_root)
+        extracted_mask = _extract_member(archive, mask_member, temp_root) if mask_member else None
+        extra_modalities: list[tuple[Path, Path]] = []
+        if flair_member and out_flair is not None:
+            extracted_flair = _extract_member(archive, flair_member, temp_root)
+            extra_modalities.append((extracted_flair, out_flair))
+        result = _crop_nifti_pair(
+            extracted_image,
+            extracted_mask,
+            out_image,
+            output_mask_path=out_mask,
+            extra_modalities=extra_modalities,
+        )
+    return result

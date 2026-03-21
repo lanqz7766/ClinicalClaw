@@ -12,7 +12,7 @@ ClinicalClaw currently sits at the stage of a working clinical workflow platform
 - SMART on FHIR and DICOMweb sandbox validation
 - workflow-specific presentation skills for cleaner user-facing output
 - a reusable Jinja2-backed report generator skill with optional PDF fallback
-- a browser-oriented neuro visualization skill that renders slice previews, overlays, and a NiiVue-style manifest
+- a browser-oriented neuro visualization skill that renders privacy-preserving slice previews, overlays, and a NiiVue-style manifest
 - a template-driven neuro report generator plus a browser viewer manifest for the PROTEAS demo
 - a neuro workflow path that now explicitly loads shared report generation, neuro-specific report generation, and neuro visualization skills before answering
 - a compatibility-first `clinicalclaw.engine` namespace for gradual runtime migration
@@ -140,7 +140,7 @@ Current neuro longitudinal demo status:
   - representative preview selection
   - trend/timeline/comparison visual rendering
   - compact risk signal generation
-- the Neuro module now also materializes a compact report bundle plus a NiiVue-backed slice/overlay viewer for the selected timepoints
+- the Neuro module now also materializes a compact report bundle plus a privacy-preserving NiiVue-backed slice/overlay viewer for the selected timepoints
 
 ### Runtime Migration
 
