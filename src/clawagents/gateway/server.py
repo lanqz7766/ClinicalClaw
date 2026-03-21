@@ -66,6 +66,9 @@ def create_app() -> tuple:
     findings_index = findings_root / "index.html"
     queue_root = Path(__file__).resolve().parents[2] / "clinicalclaw" / "ui" / "queue"
     queue_index = queue_root / "index.html"
+    repo_root = Path(__file__).resolve().parents[3]
+    neuro_asset_root = repo_root / ".clinicalclaw" / "derived" / "neuro_longitudinal"
+    neuro_asset_root.mkdir(parents=True, exist_ok=True)
 
     cors_origins = os.getenv("GATEWAY_CORS_ORIGINS", "*").split(",")
     app.add_middleware(
@@ -83,6 +86,7 @@ def create_app() -> tuple:
         app.mount("/findings-assets", StaticFiles(directory=str(findings_root)), name="findings-assets")
     if queue_root.exists():
         app.mount("/queue-assets", StaticFiles(directory=str(queue_root)), name="queue-assets")
+    app.mount("/neuro-assets", StaticFiles(directory=str(neuro_asset_root)), name="neuro-assets")
 
     @app.get("/health")
     async def health():
@@ -123,6 +127,34 @@ def create_app() -> tuple:
                 status_code=404,
                 media_type="application/json",
             )
+
+    @app.get("/api/demo/cases/{case_id}/report")
+    async def demo_case_report(case_id: str):
+        try:
+            workspace = demo_workspace_store.get_case(case_id)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown demo case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+        return {"case_id": case_id, "report": workspace.get("report", {})}
+
+    @app.get("/api/demo/cases/{case_id}/viewer")
+    async def demo_case_viewer(case_id: str):
+        try:
+            workspace = demo_workspace_store.get_case(case_id)
+        except KeyError:
+            return Response(
+                content=json.dumps({"error": f"Unknown demo case: {case_id}"}),
+                status_code=404,
+                media_type="application/json",
+            )
+        return {
+            "case_id": case_id,
+            "viewer": workspace.get("viewer") or workspace.get("imaging_preview", {}).get("viewer", {}),
+            "imaging_preview": workspace.get("imaging_preview", {}),
+        }
 
     @app.post("/api/demo/chat")
     async def demo_chat(request: Request):

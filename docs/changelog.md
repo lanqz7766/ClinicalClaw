@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-03-21
+
+- Added a reusable Jinja2-backed `clinical_report_generator` skill and Python report bundle layer with HTML output and optional PDF fallback.
+- Added a browser-oriented neuro visualization skill and tool layer that produces slice previews, overlays, comparison panels, and a NiiVue-style manifest.
+- Wired the Neuro longitudinal demo to emit reusable report and visualization artifacts alongside the existing compact clinician-facing brief.
+- Added a compact Neuro report generator bundle so the longitudinal review can present a cleaner clinical brief instead of a long wall of text.
+- Added a NiiVue-backed browser viewer for the PROTEAS Neuro demo, with static NIfTI/mask assets materialized under the local derived demo directory.
+- Added neuro skills for report generation and visualization presentation.
+- Wired the console agent to explicitly load the dedicated `neuro_report_generator` skill alongside the shared clinical report generator and neuro visualization skills for neuro longitudinal tasks.
+- Exposed the Neuro viewer assets through the gateway so the demo can load real local volumes directly in the browser.
+- Updated the Neuro demo UI to show a viewer container, timepoint selector, and compact rendered report surface.
+
 ## 2026-03-20
 
 - Switched the neuro longitudinal demo from a hippocampal placeholder narrative to a real local PROTEAS-backed neuro-oncology review when `CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT` is configured.

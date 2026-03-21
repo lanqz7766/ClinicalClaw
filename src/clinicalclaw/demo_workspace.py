@@ -18,6 +18,13 @@ def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _safe_number(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class DemoWorkspaceStore:
     def __init__(self) -> None:
         self._lock = Lock()
@@ -114,20 +121,25 @@ class DemoWorkspaceStore:
             )
             lowered = message.lower()
             analysis = workspace.get("analysis", {})
+            latest_volume = _safe_number(analysis.get("latest_volume_ml"))
+            cumulative_change = _safe_number(analysis.get("cumulative_change_pct"))
+            recent_change = _safe_number(
+                analysis.get("recent_interval_change_pct", analysis.get("recent_segment_pct"))
+            )
             if any(token in lowered for token in {"report", "brief", "summary", "summarize", "tumor board"}):
                 content = (
                     f"The treated lesion remains in a {str(analysis.get('risk_level', 'in review')).lower()} lane. "
-                    f"Enhancing tumor burden is {analysis.get('latest_volume_ml', 0):.2f} mL at the latest follow-up, "
-                    f"with {analysis.get('cumulative_change_pct', 0):+.1f}% change from baseline and "
-                    f"{analysis.get('recent_interval_change_pct', analysis.get('recent_segment_pct', 0)):+.1f}% change in the latest interval."
+                    f"Enhancing tumor burden is {latest_volume:.2f} mL at the latest follow-up, "
+                    f"with {cumulative_change:+.1f}% change from baseline and "
+                    f"{recent_change:+.1f}% change in the latest interval."
                 )
                 title = "Longitudinal report refreshed"
                 detail = "Regenerated the clinician-facing longitudinal review brief."
             elif any(token in lowered for token in {"risk", "progress", "response", "signal", "concern"}):
                 content = (
                     f"The current concern is {analysis.get('risk_level', 'in review')}. "
-                    f"Recent interval change is {analysis.get('recent_interval_change_pct', analysis.get('recent_segment_pct', 0)):+.1f}%, "
-                    f"but overall burden remains {analysis.get('cumulative_change_pct', 0):+.1f}% above baseline."
+                    f"Recent interval change is {recent_change:+.1f}%, "
+                    f"but overall burden remains {cumulative_change:+.1f}% above baseline."
                 )
                 title = "Risk explanation requested"
                 detail = "Explained the current longitudinal response signal."

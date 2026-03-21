@@ -10,6 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <script src="https://cdn.jsdelivr.net/npm/@niivue/niivue@0.67.0/dist/niivue.umd.js" defer></script>
     <link rel="stylesheet" href="/demo-assets/styles.css" />
   </head>
   <body>
@@ -427,11 +428,22 @@
                     <article class="card neuro-preview-card">
                       <div class="panel-heading">
                         <div>
-                          <p class="section-label">Imaging Preview</p>
-                          <h3>Representative follow-up slice</h3>
+                          <p class="section-label">NiiVue Viewer</p>
+                          <h3>Representative slice and overlay</h3>
                         </div>
+                        <span class="pill viewer-pill">Web viewer</span>
                       </div>
-                      <img id="preview-image" class="preview-image" src="" alt="Representative follow-up MRI with lesion overlay" />
+                      <div class="viewer-toolbar">
+                        <label class="viewer-select">
+                          <span>Timepoint</span>
+                          <select id="neuro-viewer-timepoint-select"></select>
+                        </label>
+                        <span id="neuro-viewer-status" class="viewer-status">Loading viewer</span>
+                      </div>
+                      <div class="viewer-stage">
+                        <canvas id="neuro-viewer-canvas" class="viewer-canvas"></canvas>
+                        <img id="preview-image" class="preview-image viewer-fallback" src="" alt="Representative follow-up MRI with lesion overlay" />
+                      </div>
                       <p id="preview-caption" class="support-copy"></p>
                     </article>
 
@@ -443,6 +455,7 @@
                         </div>
                       </div>
                       <p id="report-summary" class="hero-summary report-summary"></p>
+                      <div id="report-rendered" class="report-rendered"></div>
                       <div id="report-sections" class="report-sections"></div>
                       <p id="report-footnote" class="support-copy compact-note"></p>
                     </article>

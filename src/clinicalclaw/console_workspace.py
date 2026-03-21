@@ -80,6 +80,8 @@ WORKFLOWS = [
             "neuro_longitudinal_workspace",
             "dicom_series_selector",
             "neuro_longitudinal_visuals",
+            "neuro_longitudinal_viewer_manifest",
+            "neuro_longitudinal_report",
             "lesion_trend_plotter",
             "treatment_event_timeline_renderer",
             "key_slice_selector",

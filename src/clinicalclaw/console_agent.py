@@ -17,6 +17,9 @@ from clinicalclaw.neuro_longitudinal_proteas import (
     build_neuro_longitudinal_workspace,
     summarize_neuro_longitudinal_workspace,
 )
+from clinicalclaw.neuro_report_generator import build_neuro_report_bundle
+from clinicalclaw.neuro_visualization import build_neuro_visualization_bundle
+from clinicalclaw.reporting import build_report_document_from_workspace, export_report_bundle
 from clinicalclaw.queue_triage import queue_triage_store
 from clinicalclaw.screening_gap import screening_gap_store
 from clinicalclaw.safety_monitor import KNOWLEDGE_BASE, safety_monitor_store
@@ -75,6 +78,94 @@ class WorkflowCatalogTool:
 
     async def execute(self, args: dict[str, Any]) -> ToolResult:
         return ToolResult(success=True, output=json.dumps(WORKFLOWS, indent=2))
+
+
+class ClinicalReportGeneratorTool:
+    name = "render_clinical_report"
+    description = "Render a compact clinical report bundle from a workflow workspace, with HTML export and optional PDF fallback."
+    parameters = {
+        "workflow_id": {
+            "type": "string",
+            "description": "Workflow family to render. Defaults to neuro_longitudinal.",
+            "required": False,
+        },
+        "case_id": {
+            "type": "string",
+            "description": "Optional case id for the target workflow.",
+            "required": False,
+        },
+        "data_root": {
+            "type": "string",
+            "description": "Optional PROTEAS data root for neuro_longitudinal.",
+            "required": False,
+        },
+        "output_dir": {
+            "type": "string",
+            "description": "Optional output directory for the report bundle.",
+            "required": False,
+        },
+        "export_pdf": {
+            "type": "boolean",
+            "description": "Attempt PDF export if the optional PDF backend is installed.",
+            "required": False,
+        },
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        workflow_id = str(args.get("workflow_id") or "neuro_longitudinal").strip()
+        case_id = str(args.get("case_id") or "").strip()
+        export_pdf = _bool_arg(args.get("export_pdf"), default=False)
+
+        if workflow_id == "neuro_longitudinal":
+            payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+            if payload is None:
+                case_id = case_id or demo_workspace_store.snapshot()["default_case_id"]
+                payload = demo_workspace_store.get_case(case_id)
+        elif workflow_id == "findings_closure":
+            case_id = case_id or findings_closure_store.snapshot()["default_case_id"]
+            payload = findings_closure_store.get_case(case_id)
+        elif workflow_id == "queue_triage":
+            case_id = case_id or queue_triage_store.snapshot()["default_case_id"]
+            payload = queue_triage_store.get_case(case_id)
+        elif workflow_id == "missed_diagnosis_detection":
+            case_id = case_id or missed_diagnosis_store.snapshot()["default_case_id"]
+            payload = missed_diagnosis_store.get_case(case_id)
+        elif workflow_id == "screening_gap_closure":
+            case_id = case_id or screening_gap_store.snapshot()["default_case_id"]
+            payload = screening_gap_store.get_case(case_id)
+        elif workflow_id == "radiation_safety_monitor":
+            case_id = case_id or safety_monitor_store.snapshot()["default_case_id"]
+            payload = safety_monitor_store.get_case(case_id)
+        else:
+            payload = demo_workspace_store.snapshot()["workspace"]
+
+        if payload is None:
+            return ToolResult(success=False, output="", error=f"Could not resolve a workspace for {workflow_id}.")
+
+        report_document = build_report_document_from_workspace(payload, default_title=payload.get("title"))
+        target_dir = Path(
+            args.get("output_dir")
+            or payload.get("source", {}).get("output_root")
+            or REPO_ROOT / ".clinicalclaw" / "derived" / "reports" / workflow_id / (case_id or payload.get("id", "case"))
+        )
+        bundle = export_report_bundle(report_document, target_dir, stem="report", export_pdf=export_pdf)
+        compact = {
+            "workflow_id": workflow_id,
+            "case_id": case_id or payload.get("id"),
+            "title": bundle.document.title,
+            "summary": bundle.document.summary,
+            "highlight": bundle.document.highlight,
+            "badge_label": bundle.document.badge_label,
+            "html_path": bundle.html_path,
+            "json_path": bundle.json_path,
+            "pdf_path": bundle.pdf_path,
+            "pdf_supported": bundle.pdf_supported,
+            "metrics": [metric.model_dump() for metric in bundle.document.metrics],
+            "sections": [section.model_dump() for section in bundle.document.sections],
+            "figures": [figure.model_dump() for figure in bundle.document.figures],
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
 
 
 class NeuroWorkspaceTool:
@@ -531,6 +622,152 @@ class NeuroLongitudinalVisualsTool:
                 "timeline_svg": f"{asset_root}/timeline.svg",
                 "comparison_svg": f"{asset_root}/comparison.svg",
             },
+            "preview_assets": visualizations.get("preview_assets", []),
+            "comparison_panels": visualizations.get("comparison_panels", []),
+            "viewer_manifest": visualizations.get("viewer_manifest", {}),
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
+
+
+class NeuroLongitudinalViewerTool:
+    name = "get_neuro_longitudinal_viewer_manifest"
+    description = "Return the browser-viewable NiiVue manifest for a PROTEAS-backed longitudinal neuro case, including timepoints, overlay URLs, and the active display order."
+    parameters = {
+        "patient_id": {
+            "type": "string",
+            "description": "Optional PROTEAS patient id such as P28.",
+            "required": False,
+        },
+        "data_root": {
+            "type": "string",
+            "description": "Optional PROTEAS data root.",
+            "required": False,
+        },
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root to render the longitudinal neuro viewer manifest."
+                ),
+            )
+        visualizations = payload.get("visualizations", {})
+        viewer = visualizations.get("viewer_manifest") or payload.get("viewer", {})
+        compact = {
+            "id": payload.get("id"),
+            "title": payload.get("title"),
+            "dataset": payload.get("dataset"),
+            "viewer": viewer,
+            "imaging_preview": payload.get("imaging_preview", {}),
+            "preview_assets": visualizations.get("preview_assets", []),
+            "comparison_panels": visualizations.get("comparison_panels", []),
+            "asset_paths": visualizations.get("asset_paths", {}),
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
+
+
+class NeuroVisualizationBundleTool:
+    name = "build_neuro_visualization_bundle"
+    description = "Build a NiiVue-ready neuro visualization bundle with slice previews, overlays, and a manifest for the selected case."
+    parameters = {
+        "patient_id": {
+            "type": "string",
+            "description": "Optional PROTEAS patient id such as P28.",
+            "required": False,
+        },
+        "case_id": {
+            "type": "string",
+            "description": "Optional neuro case id.",
+            "required": False,
+        },
+        "data_root": {
+            "type": "string",
+            "description": "Optional PROTEAS data root.",
+            "required": False,
+        },
+        "output_dir": {
+            "type": "string",
+            "description": "Optional output directory for the visual bundle.",
+            "required": False,
+        },
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            case_id = args.get("case_id") or demo_workspace_store.snapshot()["default_case_id"]
+            payload = demo_workspace_store.get_case(case_id)
+        source = payload.get("source", {})
+        archive_path = source.get("archive_path")
+        if not archive_path:
+            return ToolResult(success=False, output="", error="No neuro archive path was available for the selected case.")
+        bundle = build_neuro_visualization_bundle(
+            archive_path=archive_path,
+            patient_id=str(args.get("patient_id") or source.get("patient_id") or payload.get("patient", {}).get("id") or "P28"),
+            timeline=list(payload.get("timeline", [])),
+            output_dir=str(
+                args.get("output_dir")
+                or source.get("output_root")
+                or REPO_ROOT / ".clinicalclaw" / "derived" / "neuro_visuals"
+            ),
+            title=str(payload.get("title") or "Neuro longitudinal review"),
+        )
+        compact = {
+            "case_id": bundle.case_id,
+            "title": bundle.title,
+            "viewer": bundle.viewer,
+            "asset_root": bundle.asset_root,
+            "viewer_manifest": bundle.viewer_manifest,
+            "comparison_panels": bundle.comparison_panels,
+            "asset_paths": bundle.asset_paths,
+            "preview_assets": [asset.model_dump() for asset in bundle.preview_assets],
+        }
+        return ToolResult(success=True, output=json.dumps(compact, indent=2))
+
+
+class NeuroReportRendererTool:
+    name = "get_neuro_longitudinal_report"
+    description = "Return a compact, template-driven report bundle for the PROTEAS-backed longitudinal neuro case."
+    parameters = {
+        "patient_id": {
+            "type": "string",
+            "description": "Optional PROTEAS patient id such as P28.",
+            "required": False,
+        },
+        "data_root": {
+            "type": "string",
+            "description": "Optional PROTEAS data root.",
+            "required": False,
+        },
+    }
+    cacheable = True
+
+    async def execute(self, args: dict[str, Any]) -> ToolResult:
+        payload = _build_neuro_workspace_payload({**args, "compact": False}, prefer_proteas=True)
+        if payload is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    f"Configure {DEFAULT_NEURO_DATA_ENV} or pass data_root to render the longitudinal neuro report."
+                ),
+            )
+        bundle = build_neuro_report_bundle(payload)
+        report_document = build_report_document_from_workspace(payload, default_title=bundle["title"])
+        target_dir = Path(payload.get("source", {}).get("output_root") or REPO_ROOT / ".clinicalclaw" / "derived" / "reports" / payload.get("id", "neuro"))
+        exported = export_report_bundle(report_document, target_dir / "report", stem="report", export_pdf=True)
+        compact = {
+            **bundle,
+            "html_path": exported.html_path,
+            "json_path": exported.json_path,
+            "pdf_path": exported.pdf_path,
+            "pdf_supported": exported.pdf_supported,
         }
         return ToolResult(success=True, output=json.dumps(compact, indent=2))
 
@@ -905,6 +1142,7 @@ async def route_with_llm(llm: LLMProvider, message: str) -> dict[str, Any]:
 def build_console_agent(llm: LLMProvider):
     tools = [
         WorkflowCatalogTool(),
+        ClinicalReportGeneratorTool(),
         FindingsWorkspaceTool(),
         QueueWorkspaceTool(),
         DiagnosisWorkspaceTool(),
@@ -912,6 +1150,9 @@ def build_console_agent(llm: LLMProvider):
         NeuroWorkspaceTool(),
         NeuroLongitudinalWorkspaceTool(),
         NeuroLongitudinalVisualsTool(),
+        NeuroLongitudinalViewerTool(),
+        NeuroVisualizationBundleTool(),
+        NeuroReportRendererTool(),
         NeuroLongitudinalSeriesCatalogTool(),
         DicomSeriesSelectorTool(),
         BrainMetResponseTrackerTool(),
@@ -934,11 +1175,12 @@ def build_console_agent(llm: LLMProvider):
         "Before producing any user-facing report, summary, or polished chat answer, you must first call "
         "use_skill for the required presentation skill or skills. "
         "Always load clinical_report_presentation first. "
+        "If you are generating a reusable report artifact, also load clinical_report_generator. "
         "If the workflow is findings_closure, also load findings_brief_presenter. "
         "If the workflow is queue_triage, also load queue_triage_presenter. "
         "If the workflow is missed_diagnosis_detection, also load missed_diagnosis_presenter. "
         "If the workflow is screening_gap_closure, also load screening_gap_presenter. "
-        "If the workflow is neuro_longitudinal, also load neuro_report_presenter and use the longitudinal neuro tools to inspect series selection, risk signal, trend, timeline, and preview assets. "
+        "If the workflow is neuro_longitudinal, also load clinical_report_generator, neuro_report_generator, neuro_visualization_presenter, and neuro_report_presenter, and use the longitudinal neuro tools to inspect series selection, risk signal, trend, timeline, viewer assets, and the rendered report bundle. "
         "If the workflow is radiation_safety_monitor, also load safety_brief_presenter. "
         "Silently organize your facts before writing, but never reveal hidden planning or chain-of-thought. "
         "For neuro requests, inspect the neuro workspace before answering. "
@@ -972,6 +1214,9 @@ def build_console_agent(llm: LLMProvider):
         "get_neuro_workspace",
         "get_neuro_longitudinal_workspace",
         "get_neuro_longitudinal_visuals",
+        "get_neuro_longitudinal_viewer_manifest",
+        "build_neuro_visualization_bundle",
+        "get_neuro_longitudinal_report",
         "get_neuro_longitudinal_series_catalog",
         "dicom_series_selector",
         "brain_met_response_tracker",
@@ -983,6 +1228,7 @@ def build_console_agent(llm: LLMProvider):
         "overlay_composer",
         "longitudinal_comparison_panel_builder",
         "risk_signal_renderer",
+        "render_clinical_report",
         "get_safety_queue",
         "get_safety_case",
         "search_safety_knowledge",
@@ -1041,10 +1287,18 @@ def build_routed_task(route: dict[str, Any], message: str) -> str:
             "Workflow: neuro_longitudinal\n"
             "Required pre-answer tool calls:\n"
             "1. use_skill(name='clinical_report_presentation')\n"
-            "2. use_skill(name='neuro_report_presenter')\n"
+            "2. use_skill(name='clinical_report_generator')\n"
+            "3. use_skill(name='neuro_report_generator')\n"
+            "4. use_skill(name='neuro_visualization_presenter')\n"
+            "5. use_skill(name='neuro_report_presenter')\n"
+            "6. get_neuro_longitudinal_workspace(...)\n"
+            "7. get_neuro_longitudinal_viewer_manifest(...)\n"
+            "8. build_neuro_visualization_bundle(...)\n"
+            "9. get_neuro_longitudinal_report(...)\n"
             "Use the neuro longitudinal workspace tools to inspect the case before answering.\n"
-            "Present the final answer as a polished clinician-facing markdown brief with sections for Timeline, "
-            "Trend Interpretation, Imaging Context, Recommendations, and a one-line Risk Tier.\n"
+            "Inspect the rendered neuro report bundle and the viewer manifest before drafting the final brief.\n"
+            "Present the final answer as a polished clinician-facing markdown brief with sections for MRI Trend Analysis, "
+            "Draft Physician Summary, Recommendations, and a one-line Risk Tier.\n"
             f"User request: {message}"
         )
     if workflow_id == "radiation_safety_monitor":

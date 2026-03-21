@@ -33,6 +33,9 @@ def test_demo_workspace_prefers_real_proteas_case_when_env_is_set(monkeypatch):
     assert payload["workspace"]["id"].startswith("proteas-")
     assert len(payload["workspace"]["timeline"]) >= 4
     assert payload["workspace"]["visualizations"]["trend_svg"].startswith("<svg")
+    assert payload["workspace"]["viewer"]["available"] is True
+    assert payload["workspace"]["viewer"]["enabled"] is True
+    assert "neuro-report-surface" in payload["workspace"]["report"]["rendered_html"]
 
 
 def test_demo_workspace_chat_updates_messages():
@@ -73,6 +76,11 @@ def test_demo_routes_expose_workspace_and_chat():
         workspace_response = client.get("/api/demo/workspace")
         assert workspace_response.status_code == 200
         assert workspace_response.json()["workspace"]["patient"]["display_name"].startswith("Subject ")
+        assert workspace_response.json()["workspace"]["report"]["title"]
+
+        report_response = client.get(f"/api/demo/cases/{workspace_response.json()['default_case_id']}/report")
+        assert report_response.status_code == 200
+        assert report_response.json()["report"]["title"]
 
         command_response = client.post(
             "/api/demo/command",
@@ -120,4 +128,5 @@ def test_demo_routes_expose_workspace_and_chat():
         assert "Findings Closure" in demo_page.text
         assert "Queue Triage" in demo_page.text
         assert "Missed Diagnosis Review" in demo_page.text
+        assert "NiiVue Viewer" in demo_page.text
         assert "/findings-demo" in demo_page.text

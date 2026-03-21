@@ -5,6 +5,7 @@ import json
 import math
 import os
 import re
+import shutil
 import struct
 import zipfile
 from datetime import UTC, datetime, timedelta
@@ -12,6 +13,10 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from pydantic import BaseModel, Field
+
+from clinicalclaw.neuro_report_generator import build_neuro_report_bundle
+from clinicalclaw.neuro_visualization import build_neuro_visualization_bundle
+from clinicalclaw.reporting import build_report_document_from_workspace, export_report_bundle
 
 
 DEFAULT_NEURO_DATA_ENV = "CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT"
@@ -185,6 +190,10 @@ class NeuroVisualizationPayload(BaseModel):
     trend_svg: str
     timeline_svg: str
     comparison_svg: str
+    viewer_manifest: dict[str, Any] = Field(default_factory=dict)
+    preview_assets: list[dict[str, Any]] = Field(default_factory=list)
+    comparison_panels: list[dict[str, Any]] = Field(default_factory=list)
+    asset_paths: dict[str, str] = Field(default_factory=dict)
 
 
 class NeuroLongitudinalWorkspace(BaseModel):
@@ -202,6 +211,7 @@ class NeuroLongitudinalWorkspace(BaseModel):
     series_catalog: list[dict[str, Any]] = Field(default_factory=list)
     radiomics: dict[str, Any] = Field(default_factory=dict)
     visualizations: NeuroVisualizationPayload | None = None
+    viewer: dict[str, Any] = Field(default_factory=dict)
 
 
 def _read_zip_names(archive: Path) -> list[str]:
@@ -230,6 +240,18 @@ def discover_proteas_patient_ids(data_root: str | Path) -> list[str]:
         else:
             ids.append(archive.name)
     return sorted(dict.fromkeys(ids))
+
+
+def _derived_assets_root() -> Path:
+    return (Path(__file__).resolve().parents[2] / ".clinicalclaw" / "derived").resolve()
+
+
+def _derived_asset_url(path: Path) -> str | None:
+    try:
+        relative = path.resolve().relative_to(DEFAULT_OUTPUT_ROOT.resolve())
+    except ValueError:
+        return None
+    return f"/neuro-assets/{relative.as_posix()}"
 
 
 def resolve_proteas_data_root(data_root: str | Path | None = None) -> Path | None:
@@ -435,6 +457,91 @@ def _extract_timepoint_members(names: Iterable[str], patient_id: str) -> dict[st
     return mapping
 
 
+def _extract_brats_members(names: Iterable[str], patient_id: str, modality: str = "t1c") -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    suffix = f"/{modality.lower()}.nii.gz"
+    prefix = f"{patient_id}/BraTS/"
+    for name in names:
+        if not name.startswith(prefix) or not name.endswith(suffix):
+            continue
+        token = name[len(prefix) :].split("/", 1)[0]
+        mapping[_canonical_timepoint(token)] = name
+    return mapping
+
+
+def _materialize_archive_member(archive_path: Path, member: str, target: Path) -> Path:
+    if target.exists():
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if archive_path.suffix.lower() == ".zip":
+        with zipfile.ZipFile(archive_path) as archive:
+            with archive.open(member) as src, open(target, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+        return target
+    source = archive_path / member
+    shutil.copyfile(source, target)
+    return target
+
+
+def _build_viewer_manifest(
+    *,
+    archive_path: Path,
+    names: list[str],
+    patient_id: str,
+    timeline: list[NeuroTimepointRecord],
+    output_base: Path,
+    materialize_assets: bool,
+    visualizations: NeuroVisualizationPayload,
+    imaging_preview: dict[str, Any],
+) -> dict[str, Any]:
+    t1c_members = _extract_brats_members(names, patient_id, modality="t1c")
+    flair_members = _extract_brats_members(names, patient_id, modality="fla")
+    viewer_root = output_base / "viewer"
+    timepoints: list[dict[str, Any]] = []
+
+    for point in timeline:
+        image_member = t1c_members.get(point.timepoint)
+        flair_member = flair_members.get(point.timepoint)
+        mask_member = point.mask_member
+        payload = {
+            "timepoint": point.timepoint,
+            "study_date": point.study_date,
+            "label": point.clinical_label or point.timepoint.replace("_", " ").title(),
+            "clinical_label": point.clinical_label or point.timepoint.replace("_", " ").title(),
+            "available": bool(image_member),
+            "image_url": None,
+            "mask_url": None,
+            "flair_url": None,
+        }
+        if materialize_assets and image_member:
+            base_target = viewer_root / point.timepoint / "t1c.nii.gz"
+            _materialize_archive_member(archive_path, image_member, base_target)
+            payload["image_url"] = _derived_asset_url(base_target)
+        if materialize_assets and mask_member:
+            overlay_target = viewer_root / point.timepoint / "tumor_mask.nii.gz"
+            _materialize_archive_member(archive_path, mask_member, overlay_target)
+            payload["mask_url"] = _derived_asset_url(overlay_target)
+        if materialize_assets and flair_member:
+            flair_target = viewer_root / point.timepoint / "flair.nii.gz"
+            _materialize_archive_member(archive_path, flair_member, flair_target)
+            payload["flair_url"] = _derived_asset_url(flair_target)
+        timepoints.append(payload)
+
+    default_timepoint = timeline[-1].timepoint if timeline else "baseline"
+    comparison_svg = _derived_asset_url(output_base / "comparison.svg") if materialize_assets else None
+    return {
+        "available": any(item.get("available") for item in timepoints),
+        "enabled": any(item.get("image_url") for item in timepoints),
+        "library": "niivue",
+        "default_timepoint": default_timepoint,
+        "timepoints": timepoints,
+        "fallback_image_url": imaging_preview.get("image_url"),
+        "fallback_comparison_svg": comparison_svg or visualizations.comparison_svg,
+        "loading_label": "Loading the longitudinal imaging review",
+        "fallback_label": "Interactive viewing is unavailable. Falling back to the static longitudinal preview.",
+    }
+
+
 def _select_timepoint_order(labels: Iterable[str]) -> list[str]:
     return sorted({label for label in labels}, key=_timepoint_rank)
 
@@ -504,6 +611,61 @@ def _extract_timepoint_volumes(archive: Path, patient_id: str, names: list[str])
             except KeyError:
                 continue
     return volumes
+
+
+def _read_archive_member_bytes(archive: Path, member: str) -> bytes | None:
+    if archive.suffix.lower() != ".zip":
+        path = archive / member
+        if not path.exists():
+            return None
+        return path.read_bytes()
+    with zipfile.ZipFile(archive) as zf:
+        try:
+            return zf.read(member)
+        except KeyError:
+            return None
+
+
+def _materialize_viewer_assets(
+    archive: Path,
+    patient_id: str,
+    points: list[NeuroTimepointRecord],
+    output_base: Path,
+) -> dict[str, Any]:
+    viewer_root = output_base / "viewer"
+    viewer_root.mkdir(parents=True, exist_ok=True)
+    timepoints: list[dict[str, Any]] = []
+    for point in points:
+        timepoint = point.timepoint
+        image_member = f"{patient_id}/BraTS/{timepoint}/t1c.nii.gz"
+        mask_member = f"{patient_id}/tumor_segmentation/{patient_id}_tumor_mask_{timepoint}.nii.gz"
+        image_bytes = _read_archive_member_bytes(archive, image_member)
+        mask_bytes = _read_archive_member_bytes(archive, mask_member)
+        if not image_bytes or not mask_bytes:
+            continue
+        point_dir = viewer_root / timepoint
+        point_dir.mkdir(parents=True, exist_ok=True)
+        image_path = point_dir / "t1c.nii.gz"
+        mask_path = point_dir / "mask.nii.gz"
+        image_path.write_bytes(image_bytes)
+        mask_path.write_bytes(mask_bytes)
+        timepoints.append(
+            {
+                "timepoint": timepoint,
+                "clinical_label": point.clinical_label or point.timepoint,
+                "study_date": point.study_date,
+                "image_url": f"/neuro-assets/{patient_id}/viewer/{timepoint}/t1c.nii.gz",
+                "mask_url": f"/neuro-assets/{patient_id}/viewer/{timepoint}/mask.nii.gz",
+                "volume_ml": point.lesion_volume_ml,
+                "trend_label": point.trend_label,
+            }
+        )
+    return {
+        "available": bool(timepoints),
+        "default_timepoint": timepoints[-1]["timepoint"] if timepoints else None,
+        "timepoints": timepoints,
+        "root": str(viewer_root),
+    }
 
 
 def _ordered_imaging_dates(series_catalog: dict[str, dict[str, Any]]) -> list[str]:
@@ -984,18 +1146,36 @@ def build_neuro_longitudinal_workspace(
         [_radiotherapy_event_date(series_catalog)] if _radiotherapy_event_date(series_catalog) else _ordered_imaging_dates(series_catalog),
     )
 
-    visualization_payload = NeuroVisualizationPayload(
-        trend_svg=_trend_svg(visual_points, response),
-        timeline_svg=_timeline_svg(visual_points),
-        comparison_svg=_comparison_svg(visual_points, response),
-    )
-
     output_base = Path(output_root or DEFAULT_OUTPUT_ROOT).expanduser().resolve() / patient_id
+    trend_svg = _trend_svg(visual_points, response)
+    timeline_svg = _timeline_svg(visual_points)
+    comparison_svg = _comparison_svg(visual_points, response)
+    viewer_payload: dict[str, Any] = {
+        "available": False,
+        "enabled": False,
+        "default_timepoint": None,
+        "timepoints": [],
+        "root": str(output_base / "viewer"),
+    }
     if materialize_assets:
         output_base.mkdir(parents=True, exist_ok=True)
-        (output_base / "trend.svg").write_text(visualization_payload.trend_svg, encoding="utf-8")
-        (output_base / "timeline.svg").write_text(visualization_payload.timeline_svg, encoding="utf-8")
-        (output_base / "comparison.svg").write_text(visualization_payload.comparison_svg, encoding="utf-8")
+        (output_base / "trend.svg").write_text(trend_svg, encoding="utf-8")
+        (output_base / "timeline.svg").write_text(timeline_svg, encoding="utf-8")
+        (output_base / "comparison.svg").write_text(comparison_svg, encoding="utf-8")
+    viewer_payload = _build_viewer_manifest(
+        archive_path=archive_path,
+        names=names,
+        patient_id=patient_id,
+        timeline=timeline,
+        output_base=output_base,
+        materialize_assets=materialize_assets,
+        visualizations=NeuroVisualizationPayload(
+            trend_svg=trend_svg,
+            timeline_svg=timeline_svg,
+            comparison_svg=comparison_svg,
+        ),
+        imaging_preview={"image_url": None},
+    )
 
     workflow = {
         "id": "post_rt_brain_met_longitudinal_review",
@@ -1042,9 +1222,56 @@ def build_neuro_longitudinal_workspace(
         "secondary_modalities": ["FLAIR", "T1W", "T2W"],
         "series_catalog": series_catalog,
         "mask_members": mask_volumes,
+        "viewer": viewer_payload,
+        "image_url": viewer_payload.get("fallback_image_url"),
     }
 
     report_sections = _build_report_sections(patient, response)
+    report_context = {
+        "id": f"proteas-{patient_id.lower()}-longitudinal-review",
+        "title": "PROTEAS longitudinal brain metastasis review",
+        "dataset": "PROTEAS / Zenodo 17253793",
+        "patient": patient,
+        "analysis": response.model_dump(),
+        "workflow": workflow,
+        "imaging_preview": {
+            "title": "Representative T1C follow-up view",
+            "caption": "Longitudinal imaging review uses the T1C series as the primary response canvas, with FLAIR and T1W as supporting context. Tumor masks remain available for preview and overlay.",
+            "primary_modality": "T1C",
+            "secondary_modalities": ["FLAIR", "T1W", "T2W"],
+            "series_catalog": series_catalog,
+            "mask_members": mask_volumes,
+            "viewer": viewer_payload,
+        },
+        "report": {
+            "title": "AI longitudinal neuro-oncology review",
+            "subtitle": "Concise physician-facing summary for a treated brain metastasis case",
+            "risk_level": response.risk_level,
+            "summary": (
+                f"Longitudinal post-RT MRI review shows a {response.response_label.replace('_', ' ')} signal with "
+                f"{response.cumulative_change_pct:+.1f}% net change in enhancing tumor burden from baseline and a {response.annualized_change_pct:+.1f}% annualized slope."
+            ),
+            "sections": report_sections,
+            "physician_questions": [
+                "Does the latest MRI pattern match the expected post-treatment course?",
+                "Should the follow-up interval be shortened based on the latest interval slope?",
+                "Are there symptoms or treatment changes that should reinterpret the imaging trend?",
+            ],
+        },
+        "timeline": [point.model_dump() for point in timeline],
+        "visualizations": {
+            "trend_svg": trend_svg,
+            "timeline_svg": timeline_svg,
+            "comparison_svg": comparison_svg,
+        },
+    }
+    report_bundle = build_neuro_report_bundle(report_context)
+    formatted_report = export_report_bundle(
+        build_report_document_from_workspace(report_context, default_title="AI longitudinal neuro-oncology review"),
+        output_base / "report",
+        stem="report",
+        export_pdf=True,
+    )
     report = {
         "title": "AI longitudinal neuro-oncology review",
         "subtitle": "Concise physician-facing summary for a treated brain metastasis case",
@@ -1054,12 +1281,44 @@ def build_neuro_longitudinal_workspace(
             f"{response.cumulative_change_pct:+.1f}% net change in enhancing tumor burden from baseline and a {response.annualized_change_pct:+.1f}% annualized slope."
         ),
         "sections": report_sections,
+        "rendered_html": str(report_bundle["html"]).strip(),
+        "rendered_document_html": str(formatted_report.html).strip(),
+        "rendered_markdown": str(report_bundle["markdown"]).strip(),
+        "rendered_bundle": formatted_report.model_dump(),
+        "html_path": formatted_report.html_path,
+        "json_path": formatted_report.json_path,
+        "pdf_path": formatted_report.pdf_path,
         "physician_questions": [
             "Does the latest MRI pattern match the expected post-treatment course?",
             "Should the follow-up interval be shortened based on the latest interval slope?",
             "Are there symptoms or treatment changes that should reinterpret the imaging trend?",
         ],
     }
+
+    visualization_bundle = build_neuro_visualization_bundle(
+        archive_path=archive_path,
+        patient_id=patient_id,
+        timeline=[point.model_dump() for point in timeline],
+        output_dir=output_base,
+        title="PROTEAS longitudinal brain metastasis review",
+    )
+    visualization_payload = NeuroVisualizationPayload(
+        trend_svg=trend_svg,
+        timeline_svg=timeline_svg,
+        comparison_svg=comparison_svg,
+        viewer_manifest=visualization_bundle.viewer_manifest,
+        preview_assets=[asset.model_dump() for asset in visualization_bundle.preview_assets],
+        comparison_panels=visualization_bundle.comparison_panels,
+        asset_paths={
+            "trend_svg": str(output_base / "trend.svg"),
+            "timeline_svg": str(output_base / "timeline.svg"),
+            "comparison_svg": str(output_base / "comparison.svg"),
+            **visualization_bundle.asset_paths,
+            "report_html": formatted_report.html_path or "",
+            "report_json": formatted_report.json_path or "",
+            "report_pdf": formatted_report.pdf_path or "",
+        },
+    )
 
     review = {
         "status": "in_review",
@@ -1099,6 +1358,10 @@ def build_neuro_longitudinal_workspace(
             "radiomics_workbook": str(resolved_root / "PROTEAS-MRI_radiomics_data.xlsx"),
             "output_root": str(output_base),
             "patient_id": patient_id,
+            "report_html_path": formatted_report.html_path,
+            "report_json_path": formatted_report.json_path,
+            "report_pdf_path": formatted_report.pdf_path,
+            "visualization_manifest_path": visualization_bundle.asset_paths.get("manifest"),
         },
         series_catalog=[
             {
@@ -1109,6 +1372,7 @@ def build_neuro_longitudinal_workspace(
         ],
         radiomics=radiomics,
         visualizations=visualization_payload,
+        viewer=viewer_payload,
     )
     return workspace
 
@@ -1158,11 +1422,14 @@ def summarize_neuro_longitudinal_workspace(workspace: NeuroLongitudinalWorkspace
             for point in timeline
         ],
         "visualizations": payload.get("visualizations", {}),
+        "viewer": payload.get("viewer", {}),
         "report": {
             "title": payload.get("report", {}).get("title"),
             "summary": payload.get("report", {}).get("summary"),
             "risk_level": payload.get("report", {}).get("risk_level"),
             "sections": payload.get("report", {}).get("sections", []),
+            "rendered_html": payload.get("report", {}).get("rendered_html"),
+            "rendered_markdown": payload.get("report", {}).get("rendered_markdown"),
         },
         "workflow": payload.get("workflow", {}),
         "review": payload.get("review", {}),

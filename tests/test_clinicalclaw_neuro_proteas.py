@@ -102,5 +102,8 @@ def test_p28_workspace_builds_real_longitudinal_review():
     assert workspace.visualizations.trend_svg.startswith("<svg")
     assert workspace.visualizations.timeline_svg.startswith("<svg")
     assert workspace.visualizations.comparison_svg.startswith("<svg")
+    assert workspace.viewer["available"] is True
+    assert workspace.viewer["enabled"] is False
+    assert "neuro-report-surface" in workspace.report["rendered_html"]
     assert workspace.workflow["events"][0]["date"] == "2022-06-30"
     assert workspace.analysis.risk_level

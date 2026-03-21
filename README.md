@@ -9,6 +9,8 @@ ClinicalClaw is a modular clinical AI execution and integration platform built o
 - SMART on FHIR and DICOMweb sandbox validation paths
 - a unified `/demo` console with real chat routing into workflow modules
 - workflow-specific presentation skills for cleaner, clinician-facing output
+- a reusable Jinja2-backed report generator skill with optional PDF fallback
+- a browser-oriented neuro visualization skill that renders slice previews, overlays, and a NiiVue-style manifest
 - a new `clinicalclaw.engine` compatibility namespace that begins internalizing the runtime under the ClinicalClaw brand
 
 ## What It Is Today
@@ -108,7 +110,8 @@ Neuro longitudinal review:
 - mounted inside `/demo`
 - supports a real local PROTEAS-backed neuro-oncology longitudinal review when `CLINICALCLAW_NEURO_LONGITUDINAL_DATA_ROOT` is configured
 - focuses on post-radiotherapy brain metastasis follow-up, treatment-aligned MRI review, and concise physician-facing summaries
-- includes radiomics-backed lesion trend tracking, RT-aligned timeline, representative imaging preview, and reviewer actions
+- includes radiomics-backed lesion trend tracking, RT-aligned timeline, a NiiVue-powered slice/overlay viewer, compact report bundles, and reviewer actions
+- exposes reusable `render_clinical_report` and `build_neuro_visualization_bundle` tools for agent-driven report and visualization generation
 
 Radiation safety monitor:
 
@@ -389,6 +392,8 @@ Presentation skills:
 - [skills/missed_diagnosis_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/missed_diagnosis_presenter/SKILL.md)
 - [skills/screening_gap_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/screening_gap_presenter/SKILL.md)
 - [skills/neuro_report_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/neuro_report_presenter/SKILL.md)
+- [skills/neuro_report_generator/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/neuro_report_generator/SKILL.md)
+- [skills/neuro_visualization_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/neuro_visualization_presenter/SKILL.md)
 - [skills/safety_brief_presenter/SKILL.md](/Users/qlan/Documents/Agent/ClinicalClaw/skills/safety_brief_presenter/SKILL.md)
 
 These skills are used to:

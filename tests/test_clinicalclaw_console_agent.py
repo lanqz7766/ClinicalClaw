@@ -109,6 +109,8 @@ def test_build_routed_task_mentions_selected_workflow():
 
     assert "Workflow: neuro_longitudinal" in task
     assert "clinical_report_presentation" in task
+    assert "clinical_report_generator" in task
+    assert "neuro_report_generator" in task
     assert "neuro_report_presenter" in task
     assert "Review the longitudinal MRI trend." in task
 
@@ -132,6 +134,8 @@ def test_build_console_agent_loads_presentation_skill():
     assert "key_slice_selector" in allowed
     assert "overlay_composer" in allowed
     assert "risk_signal_renderer" in allowed
+    assert "render_clinical_report" in allowed
+    assert "build_neuro_visualization_bundle" in allowed
 
 
 def test_demo_execute_stream_emits_routed_and_done():
