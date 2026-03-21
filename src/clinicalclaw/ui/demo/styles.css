@@ -5,17 +5,19 @@
   --surface-soft: rgba(248, 251, 253, 0.82);
   --border: rgba(18, 37, 54, 0.09);
   --border-strong: rgba(18, 37, 54, 0.14);
-  --text: #122536;
-  --muted: #66798c;
-  --blue: #0d6ab8;
-  --teal: #157d76;
-  --slate: #6e7f91;
-  --amber: #c67b10;
+  --text: #132238;
+  --muted: #61748a;
+  --blue: #2f6df6;
+  --teal: #108e83;
+  --slate: #728396;
+  --amber: #b97508;
   --red: #c14553;
-  --blue-soft: #e7f2ff;
-  --teal-soft: #e4f7f2;
+  --blue-soft: #e6eeff;
+  --teal-soft: #dff7f2;
   --amber-soft: #fff3df;
   --red-soft: #ffe7eb;
+  --violet: #7059f6;
+  --violet-soft: #eee9ff;
   --shadow-soft: 0 12px 30px rgba(20, 42, 60, 0.04);
   --shadow-raised: 0 24px 54px rgba(20, 42, 60, 0.08);
   --radius-xl: 24px;
@@ -34,8 +36,9 @@ body {
   font-family: "Manrope", sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(13, 106, 184, 0.1), transparent 24%),
-    radial-gradient(circle at top right, rgba(21, 125, 118, 0.08), transparent 20%),
+    radial-gradient(circle at top left, rgba(112, 89, 246, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(16, 142, 131, 0.08), transparent 20%),
+    radial-gradient(circle at 50% 0%, rgba(47, 109, 246, 0.08), transparent 30%),
     linear-gradient(180deg, #fbfdff 0%, var(--bg) 100%);
 }
 
@@ -349,6 +352,7 @@ body {
   gap: 28px;
   align-items: start;
   padding: 26px 0 72px;
+  position: relative;
 }
 
 .landing-copy {
@@ -358,12 +362,28 @@ body {
   max-width: 620px;
   margin: 0;
   padding: 24px 8px 0 0;
+  position: relative;
+}
+
+.landing-copy::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 0;
+  width: 96px;
+  height: 96px;
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(112, 89, 246, 0.14), rgba(47, 109, 246, 0.05));
+  filter: blur(2px);
+  z-index: -1;
 }
 
 .landing-copy h2 {
   font-size: clamp(2.3rem, 4vw, 4rem);
   line-height: 1;
   max-width: 11ch;
+  color: #0f1c33;
 }
 
 .landing-copy .support-copy {
@@ -380,7 +400,8 @@ body {
   border: 1px solid rgba(18, 37, 54, 0.07);
   border-radius: 28px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 252, 0.96));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(247, 250, 252, 0.7));
+  backdrop-filter: blur(22px);
   box-shadow: var(--shadow-raised);
 }
 
@@ -457,6 +478,19 @@ body {
   grid-column: 1 / -1;
   gap: 16px;
   padding-top: 6px;
+  position: relative;
+}
+
+.landing-workflows::before {
+  content: "";
+  position: absolute;
+  inset: -12px -8px auto -8px;
+  height: 140px;
+  border-radius: 32px;
+  background:
+    linear-gradient(135deg, rgba(112, 89, 246, 0.08), rgba(16, 142, 131, 0.08));
+  filter: blur(24px);
+  z-index: -1;
 }
 
 .section-header {
@@ -483,14 +517,29 @@ body {
   padding: 16px;
   font-size: 0.86rem;
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 252, 0.88));
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.72), rgba(246, 249, 253, 0.56)),
+    linear-gradient(135deg, rgba(112, 89, 246, 0.12), rgba(16, 142, 131, 0.05));
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.44);
   transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.workflow-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--violet), var(--blue), var(--teal));
+  opacity: 0.78;
 }
 
 .workflow-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(13, 106, 184, 0.16);
-  box-shadow: var(--shadow-soft);
+  border-color: rgba(47, 109, 246, 0.18);
+  box-shadow: 0 18px 38px rgba(56, 77, 110, 0.12);
 }
 
 .workflow-card h3,
@@ -553,6 +602,10 @@ body {
 .module-page {
   display: grid;
   gap: 18px;
+  --module-accent: var(--blue);
+  --module-accent-soft: var(--blue-soft);
+  --module-glow: rgba(47, 109, 246, 0.12);
+  --module-wash: rgba(47, 109, 246, 0.05);
 }
 
 .module-layout {
@@ -569,6 +622,70 @@ body {
 
 .module-content {
   min-width: 0;
+}
+
+.page-panel[data-page-panel="findings"] .module-page {
+  --module-accent: #2f6df6;
+  --module-accent-soft: #e6eeff;
+  --module-glow: rgba(47, 109, 246, 0.14);
+  --module-wash: rgba(47, 109, 246, 0.06);
+}
+
+.page-panel[data-page-panel="queue"] .module-page {
+  --module-accent: #108e83;
+  --module-accent-soft: #dff7f2;
+  --module-glow: rgba(16, 142, 131, 0.14);
+  --module-wash: rgba(16, 142, 131, 0.06);
+}
+
+.page-panel[data-page-panel="diagnosis"] .module-page {
+  --module-accent: #7059f6;
+  --module-accent-soft: #eee9ff;
+  --module-glow: rgba(112, 89, 246, 0.14);
+  --module-wash: rgba(112, 89, 246, 0.06);
+}
+
+.page-panel[data-page-panel="screening"] .module-page {
+  --module-accent: #c67b10;
+  --module-accent-soft: #fff3df;
+  --module-glow: rgba(198, 123, 16, 0.14);
+  --module-wash: rgba(198, 123, 16, 0.06);
+}
+
+.page-panel[data-page-panel="neuro"] .module-page {
+  --module-accent: #2a66d9;
+  --module-accent-soft: #e6eeff;
+  --module-glow: rgba(42, 102, 217, 0.14);
+  --module-wash: rgba(42, 102, 217, 0.06);
+}
+
+.page-panel[data-page-panel="safety"] .module-page {
+  --module-accent: #c14553;
+  --module-accent-soft: #ffe7eb;
+  --module-glow: rgba(193, 69, 83, 0.14);
+  --module-wash: rgba(193, 69, 83, 0.06);
+}
+
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) {
+  position: relative;
+}
+
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"])::before {
+  content: "";
+  position: absolute;
+  inset: 16px 0 auto;
+  height: 220px;
+  border-radius: 32px;
+  background:
+    linear-gradient(135deg, var(--module-glow), transparent 68%);
+  filter: blur(28px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .module-page {
+  position: relative;
+  z-index: 1;
 }
 
 .neuro-layout {
@@ -1406,6 +1523,18 @@ body {
   max-width: 16ch;
 }
 
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .module-page-header {
+  border-color: color-mix(in srgb, var(--module-accent) 18%, rgba(18, 37, 54, 0.06));
+  background:
+    radial-gradient(circle at top right, var(--module-glow), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), color-mix(in srgb, white 92%, var(--module-accent-soft) 8%));
+}
+
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .module-page-header .eyebrow,
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .module-page-header .section-label {
+  color: var(--module-accent);
+}
+
 .module-page .section-label,
 .module-page .support-copy,
 .module-page .hint,
@@ -1430,6 +1559,12 @@ body {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 253, 0.9));
 }
 
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .module-rail > .card.compact {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), color-mix(in srgb, white 88%, var(--module-accent-soft) 12%));
+  border-color: color-mix(in srgb, var(--module-accent) 12%, rgba(18, 37, 54, 0.07));
+}
+
 .module-page .support-copy,
 .module-page .hint {
   font-size: 0.88rem;
@@ -1451,7 +1586,7 @@ body {
   padding: 14px 16px;
   border-radius: 16px;
   border: 1px solid rgba(18, 37, 54, 0.06);
-  border-top: 3px solid rgba(13, 106, 184, 0.24);
+  border-top: 3px solid color-mix(in srgb, var(--module-accent) 26%, rgba(18, 37, 54, 0.1));
   background: rgba(251, 253, 255, 0.82);
 }
 
@@ -1504,7 +1639,7 @@ body {
   font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.09em;
-  color: var(--blue);
+  color: var(--module-accent);
 }
 
 .report-block p {
@@ -1513,14 +1648,105 @@ body {
 
 .module-content > .grid.two-col > .card:first-child {
   background:
-    radial-gradient(circle at top right, rgba(13, 106, 184, 0.07), transparent 32%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 248, 252, 0.94));
+    radial-gradient(circle at top right, var(--module-glow), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), color-mix(in srgb, white 92%, var(--module-accent-soft) 8%));
 }
 
 .module-content > .grid.two-col > .card:last-child {
   background:
-    radial-gradient(circle at top right, rgba(18, 37, 54, 0.03), transparent 28%),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--module-accent) 6%, transparent), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 253, 0.94));
+}
+
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .panel-heading {
+  border-bottom-color: color-mix(in srgb, var(--module-accent) 14%, rgba(18, 37, 54, 0.05));
+}
+
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .summary-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), color-mix(in srgb, white 90%, var(--module-accent-soft) 10%));
+}
+
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .field-chip {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), color-mix(in srgb, white 94%, var(--module-accent-soft) 6%));
+  border-color: color-mix(in srgb, var(--module-accent) 10%, rgba(18, 37, 54, 0.06));
+}
+
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .case-item.active {
+  border-color: color-mix(in srgb, var(--module-accent) 28%, rgba(18, 37, 54, 0.1));
+  box-shadow: inset 3px 0 0 var(--module-accent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 76%, var(--module-accent-soft) 24%), rgba(255, 255, 255, 0.96));
+}
+
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .risk-badge.alert {
+  background: color-mix(in srgb, white 35%, var(--module-accent-soft) 65%);
+  color: var(--module-accent);
+}
+
+.page-panel[data-page-panel]:not([data-page-panel="home"]):not([data-page-panel="workflows"]) .module-content > .summary-cards {
+  gap: 14px;
+}
+
+.page-panel[data-page-panel="findings"] .summary-card:first-child,
+.page-panel[data-page-panel="queue"] .summary-card:first-child,
+.page-panel[data-page-panel="diagnosis"] .summary-card:first-child,
+.page-panel[data-page-panel="screening"] .summary-card:first-child,
+.page-panel[data-page-panel="safety"] .summary-card:first-child {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--module-accent) 12%, transparent);
+}
+
+.page-panel[data-page-panel="findings"] .report-block,
+.page-panel[data-page-panel="queue"] .report-block,
+.page-panel[data-page-panel="diagnosis"] .report-block,
+.page-panel[data-page-panel="screening"] .report-block {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), color-mix(in srgb, white 90%, var(--module-accent-soft) 10%));
+}
+
+.page-panel[data-page-panel="queue"] .report-block {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--module-accent) 26%, white);
+}
+
+.page-panel[data-page-panel="screening"] .field-chip strong {
+  color: color-mix(in srgb, var(--module-accent) 78%, var(--text));
+}
+
+.page-panel[data-page-panel="diagnosis"] .report-block h4,
+.page-panel[data-page-panel="diagnosis"] .risk-badge.alert {
+  letter-spacing: 0.1em;
+}
+
+.page-panel[data-page-panel="neuro"] .metric,
+.page-panel[data-page-panel="neuro"] .neuro-signal-chip,
+.page-panel[data-page-panel="neuro"] .signal-chip,
+.page-panel[data-page-panel="neuro"] .timeline-node {
+  border-color: color-mix(in srgb, var(--module-accent) 12%, rgba(18, 37, 54, 0.06));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), color-mix(in srgb, white 91%, var(--module-accent-soft) 9%));
+}
+
+.page-panel[data-page-panel="neuro"] .viewer-stage {
+  border-color: color-mix(in srgb, var(--module-accent) 16%, rgba(18, 37, 54, 0.07));
+  background:
+    radial-gradient(circle at top right, var(--module-glow), transparent 38%),
+    linear-gradient(180deg, color-mix(in srgb, white 93%, var(--module-accent-soft) 7%), rgba(18, 37, 54, 0.02));
+}
+
+.page-panel[data-page-panel="safety"] .match-card,
+.page-panel[data-page-panel="safety"] .audit-item,
+.page-panel[data-page-panel="safety"] .timeline-item,
+.page-panel[data-page-panel="safety"] .email-card {
+  border-color: color-mix(in srgb, var(--module-accent) 12%, rgba(18, 37, 54, 0.06));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), color-mix(in srgb, white 92%, var(--module-accent-soft) 8%));
+}
+
+.page-panel[data-page-panel="safety"] .queue-pill {
+  border-color: color-mix(in srgb, var(--module-accent) 16%, rgba(18, 37, 54, 0.07));
+  backdrop-filter: blur(14px);
 }
 
 .neuro-module .module-page-header h2 {
